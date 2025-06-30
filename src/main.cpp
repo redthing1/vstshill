@@ -1,44 +1,49 @@
-// Minimal cross-platform VST3 host application
+// minimal cross-platform vst3 host application
+
+// standard library
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
 
+// third-party libraries
+#include <SDL2/SDL.h>
+#include <redlog/redlog.hpp>
+
+// local includes
 #include "ext/args.hpp"
-#include "pluginterfaces/vst/ivstaudioprocessor.h"
-#include "pluginterfaces/vst/ivstcomponent.h"
+#include "vstk.hpp"
+
+// vst3 sdk (minimal includes for host application)
 #include "public.sdk/source/vst/hosting/hostclasses.h"
 #include "public.sdk/source/vst/hosting/module.h"
-#include "public.sdk/source/vst/hosting/plugprovider.h"
 #include "public.sdk/source/vst/utility/stringconvert.h"
-#include <redlog/redlog.hpp>
 
 using namespace Steinberg;
 
-// Global logger instance
+namespace {
 auto log_main = redlog::get_logger("vstshill");
+}
 
-// VST3 host application implementation - provides context for plugins
+namespace {
+// vst3 host application implementation - provides context for plugins
 class VstHostApplication : public Vst::IHostApplication {
 public:
   VstHostApplication() = default;
   virtual ~VstHostApplication() = default;
 
-  // Returns the host application name to plugins
   tresult PLUGIN_API getName(Vst::String128 name) override {
-    return Vst::StringConvert::convert("VST Shill Host", name) ? kResultTrue
-                                                               : kInternalError;
+    return Vst::StringConvert::convert("vstshill host", name) ? kResultTrue
+                                                              : kInternalError;
   }
 
-  // Creates host-side objects that plugins may request
   tresult PLUGIN_API createInstance(TUID cid, TUID _iid, void** obj) override {
-    // Create message objects for plugin communication
     if (FUnknownPrivate::iidEqual(cid, Vst::IMessage::iid) &&
         FUnknownPrivate::iidEqual(_iid, Vst::IMessage::iid)) {
       *obj = new Vst::HostMessage;
       return kResultTrue;
     }
 
-    // Create attribute list objects for parameter storage
     if (FUnknownPrivate::iidEqual(cid, Vst::IAttributeList::iid) &&
         FUnknownPrivate::iidEqual(_iid, Vst::IAttributeList::iid)) {
       if (auto al = Vst::HostAttributeList::make()) {
@@ -57,8 +62,9 @@ public:
 
 IMPLEMENT_FUNKNOWN_METHODS(VstHostApplication, Vst::IHostApplication,
                            Vst::IHostApplication::iid)
+} // namespace
 
-// Global host context required by VST3 SDK
+// global host context required by vst3 sdk
 namespace Steinberg {
 FUnknown* gStandardPluginContext = new VstHostApplication();
 }
@@ -68,7 +74,6 @@ void load_vst3_plugin(const std::string& plugin_path) {
   auto log = log_main.with_name("loader");
   log.inf("loading vst3 plugin", redlog::field("path", plugin_path));
 
-  // load the vst3 module
   std::string error_description;
   auto module = VST3::Hosting::Module::create(plugin_path, error_description);
   if (!module) {
@@ -234,7 +239,7 @@ void load_vst3_plugin(const std::string& plugin_path) {
   }
 }
 
-// Returns platform-specific VST3 directory paths
+// returns platform-specific vst3 directory paths
 std::vector<std::string> get_vst3_search_paths() {
 #ifdef __APPLE__
   return {"/Library/Audio/Plug-Ins/VST3",
@@ -248,7 +253,7 @@ std::vector<std::string> get_vst3_search_paths() {
 #endif
 }
 
-// Displays platform-specific example paths
+// displays platform-specific example paths
 void show_example_paths() {
   log_main.inf("example plugin paths:");
 #ifdef __APPLE__
@@ -262,18 +267,110 @@ void show_example_paths() {
 #endif
 }
 
+// opens plugin editor gui using vstk
+void open_plugin_gui(const std::string& plugin_path) {
+  auto log = log_main.with_name("gui");
+  log.inf("opening plugin editor", redlog::field("path", plugin_path));
+
+  // create plugin instance using vstk
+  vstk::Plugin plugin(log);
+
+  // load plugin with default configuration
+  auto load_result = plugin.load(plugin_path);
+  if (!load_result) {
+    log.error("failed to load plugin",
+              redlog::field("error", load_result.error()));
+    return;
+  }
+
+  log.inf("plugin loaded successfully", redlog::field("name", plugin.name()));
+
+  // check if plugin has an editor
+  if (!plugin.has_editor()) {
+    log.warn("plugin does not have an editor interface (headless plugin)");
+    return;
+  }
+
+  // create editor window
+  auto window_result = plugin.create_editor_window();
+  if (!window_result) {
+    log.error("failed to create editor window",
+              redlog::field("error", window_result.error()));
+    return;
+  }
+
+  auto window = std::move(window_result.value());
+  log.inf("editor window opened successfully");
+
+  // event loop for gui
+  log.inf("entering gui event loop (close window to exit)");
+  bool running = true;
+  while (running && window->is_open()) {
+    vstk::GuiWindow::process_events();
+
+    // small delay to prevent high cpu usage
+    SDL_Delay(16); // ~60 fps
+  }
+
+  log.inf("gui session ended");
+}
+
+// processes audio file through plugin using vstk
+void process_audio_file(const std::string& input_file,
+                        const std::string& output_file,
+                        const std::string& plugin_path) {
+  auto log = log_main.with_name("processor");
+  log.inf("processing audio file", redlog::field("input", input_file),
+          redlog::field("output", output_file),
+          redlog::field("plugin", plugin_path));
+
+  // create plugin instance
+  vstk::Plugin plugin(log);
+
+  // configure for offline processing
+  vstk::PluginConfig config;
+  config.with_process_mode(vstk::ProcessMode::Offline)
+      .with_sample_rate(44100)
+      .with_block_size(512);
+
+  // load plugin
+  auto load_result = plugin.load(plugin_path, config);
+  if (!load_result) {
+    log.error("failed to load plugin",
+              redlog::field("error", load_result.error()));
+    return;
+  }
+
+  log.inf("plugin loaded for audio processing",
+          redlog::field("name", plugin.name()));
+
+  // todo: implement actual audio file i/o and processing
+  // this would require an audio library like libsndfile or similar
+  log.warn(
+      "audio file processing not yet implemented - placeholder functionality");
+  log.inf("would process:", redlog::field("input_file", input_file),
+          redlog::field("output_file", output_file),
+          redlog::field("plugin_name", plugin.name()));
+}
+
 int main(int argc, char* argv[]) {
-  // Set default log level to info
+  // set default log level to info
   redlog::set_level(redlog::level::info);
 
-  args::ArgumentParser parser("VST Shill - Minimal VST3 Host",
-                              "Scans and loads VST3 plugins");
+  args::ArgumentParser parser("vstshill - minimal vst3 host",
+                              "scans, loads, and hosts vst3 plugins");
   args::CounterFlag trace(
       parser, "trace",
-      "Increase verbosity level (-v=trace, -vv=debug, -vvv=trace)",
+      "increase verbosity level (-v=trace, -vv=debug, -vvv=trace)",
       {'v', "trace"});
+  args::Flag gui_mode(parser, "gui", "open plugin editor gui window", {"gui"});
+  args::ValueFlag<std::string> input_file(
+      parser, "input", "input audio file for processing mode", {"input", 'i'});
+  args::ValueFlag<std::string> output_file(
+      parser, "output", "output audio file for processing mode",
+      {"output", 'o'});
   args::Positional<std::string> plugin_path(parser, "plugin_path",
-                                            "Path to VST3 plugin to scan");
+                                            "path to vst3 plugin to scan/load");
 
   try {
     parser.ParseCLI(argc, argv);
@@ -286,7 +383,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  // Set log level based on verbosity flags
+  // set log level based on verbosity flags
   int verbosity = args::get(trace);
   switch (verbosity) {
   case 0:
@@ -304,17 +401,38 @@ int main(int argc, char* argv[]) {
     break;
   }
 
-  log_main.inf("vstshill: vst3 analyzer");
+  log_main.inf("vstshill: vst3 host");
   log_main.trc("verbosity level set",
                redlog::field("level", redlog::level_name(redlog::get_level())),
                redlog::field("flag_count", verbosity));
 
   if (plugin_path) {
-    // load specific plugin provided as argument
-    load_vst3_plugin(args::get(plugin_path));
+    std::string path = args::get(plugin_path);
+
+    // determine mode based on flags
+    if (gui_mode) {
+      // gui mode - open plugin editor
+      log_main.inf("entering GUI mode");
+      open_plugin_gui(path);
+    } else if (input_file && output_file) {
+      // processing mode - process audio file
+      log_main.inf("entering audio processing mode");
+      process_audio_file(args::get(input_file), args::get(output_file), path);
+    } else {
+      // default inspection mode - analyze plugin
+      log_main.inf("entering inspection mode");
+      load_vst3_plugin(path);
+    }
   } else {
-    // Show usage and scan common directories
-    log_main.inf("usage: " + std::string(argv[0]) + " [-v] <plugin_path>");
+    // show usage and scan common directories
+    log_main.inf("usage examples:");
+    log_main.inf("  " + std::string(argv[0]) +
+                 " <plugin_path>                    # inspect plugin");
+    log_main.inf("  " + std::string(argv[0]) +
+                 " --gui <plugin_path>              # open editor GUI");
+    log_main.inf("  " + std::string(argv[0]) +
+                 " -i input.wav -o output.wav <plugin_path>  # process audio");
+
     show_example_paths();
 
     log_main.inf("common vst3 directories:");
