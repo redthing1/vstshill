@@ -318,13 +318,8 @@ private:
   static std::vector<GuiWindow*> _active_windows;
 };
 
-// utility functions
+// audio utility functions
 namespace util {
-std::vector<std::string> get_vst3_search_paths();
-std::vector<std::string>
-find_vst3_plugins(const std::vector<std::string>& search_paths = {});
-Result<PluginInfo> scan_plugin(const std::string& plugin_path);
-
 // audio format conversion helpers
 void interleave_audio(const std::vector<Sample32*>& channels,
                       Sample32* interleaved, int32_t num_samples);
@@ -337,6 +332,9 @@ void setup_process_context(ProcessContext& context, double sample_rate,
                            int64_t sample_position = 0, double tempo = 120.0,
                            int32_t time_sig_numerator = 4,
                            int32_t time_sig_denominator = 4);
+
+// plugin info scanning
+Result<PluginInfo> scan_plugin(const std::string& plugin_path);
 } // namespace util
 
 } // namespace vstk

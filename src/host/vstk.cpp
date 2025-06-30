@@ -917,49 +917,9 @@ tresult GuiWindow::handle_plugin_resize(IPlugView* view, ViewRect* newSize) {
   return kResultTrue;
 }
 
-// utility functions
+// audio utility functions
 
 namespace util {
-
-std::vector<std::string> get_vst3_search_paths() {
-#ifdef __APPLE__
-  return {"/Library/Audio/Plug-Ins/VST3",
-          std::string(getenv("HOME") ? getenv("HOME") : "") +
-              "/Library/Audio/Plug-Ins/VST3"};
-#elif defined(_WIN32)
-  return {"C:\\Program Files\\Common Files\\VST3",
-          std::string(getenv("PROGRAMFILES") ? getenv("PROGRAMFILES") : "") +
-              "\\Common Files\\VST3"};
-#else
-  return {std::string(getenv("HOME") ? getenv("HOME") : "") + "/.vst3",
-          "/usr/lib/vst3", "/usr/local/lib/vst3"};
-#endif
-}
-
-std::vector<std::string>
-find_vst3_plugins(const std::vector<std::string>& search_paths) {
-  std::vector<std::string> plugins;
-  auto paths = search_paths.empty() ? get_vst3_search_paths() : search_paths;
-
-  for (const auto& path : paths) {
-    if (!std::filesystem::exists(path)) {
-      continue;
-    }
-
-    try {
-      for (const auto& entry :
-           std::filesystem::recursive_directory_iterator(path)) {
-        if (entry.is_directory() && entry.path().extension() == ".vst3") {
-          plugins.push_back(entry.path().string());
-        }
-      }
-    } catch (const std::exception& e) {
-      // ignore directories we can't access
-    }
-  }
-
-  return plugins;
-}
 
 Result<PluginInfo> scan_plugin(const std::string& plugin_path) {
   Plugin plugin(redlog::get_logger("vstk::scanner"));

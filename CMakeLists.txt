@@ -36,7 +36,9 @@ pkg_check_modules(SDL2 REQUIRED sdl2)
 # source files
 set(vstshill_sources 
     src/main.cpp
-    src/vstk.cpp
+    src/host/vstk.cpp
+    src/host/minimal.cpp
+    src/util/vst_discovery.cpp
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )
 
