@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(vstshill
     VERSION 1.0.0
-    DESCRIPTION "Minimal cross-platform VST3 host"
+    DESCRIPTION "vstshill"
     LANGUAGES CXX
 )
 
@@ -29,6 +29,9 @@ endif()
 # Include VST3 SDK
 add_subdirectory(lib/vst3sdk)
 
+# Include redlog logging library
+add_subdirectory(lib/redlog_cpp)
+
 # Platform-specific VST3 module sources
 set(vstshill_sources src/main.cpp)
 
@@ -44,8 +47,8 @@ endif()
 # Create executable
 add_executable(vstshill ${vstshill_sources})
 
-# Link VST3 SDK hosting library
-target_link_libraries(vstshill PRIVATE sdk_hosting)
+# Link VST3 SDK hosting library and redlog
+target_link_libraries(vstshill PRIVATE sdk_hosting redlog::redlog)
 
 # Add external headers directory for args library
 target_include_directories(vstshill PRIVATE src)

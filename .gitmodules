@@ -10,3 +10,6 @@
 [submodule "lib/vst3sdk/cmake"]
 	path = lib/vst3sdk/cmake
 	url = https://github.com/steinbergmedia/vst3_cmake.git
+[submodule "lib/redlog_cpp"]
+	path = lib/redlog_cpp
+	url = https://github.com/redthing1/redlog_cpp.git
