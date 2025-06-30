@@ -47,6 +47,9 @@ add_executable(vstshill ${vstshill_sources})
 # Link VST3 SDK hosting library
 target_link_libraries(vstshill PRIVATE sdk_hosting)
 
+# Add external headers directory for args library
+target_include_directories(vstshill PRIVATE src)
+
 # Platform-specific system libraries
 if(APPLE)
     target_link_libraries(vstshill PRIVATE "-framework CoreFoundation" "-framework Foundation")

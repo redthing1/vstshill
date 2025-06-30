@@ -4,6 +4,8 @@ CLAUDE*
 
 build-*/
 
+.vscode/
+
 # Created by https://www.toptal.com/developers/gitignore/api/windows,macos,linux,c++,visualstudiocode,clion,python,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=windows,macos,linux,c++,visualstudiocode,clion,python,cmake
 
