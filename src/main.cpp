@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "ext/args.hpp"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
@@ -11,6 +12,9 @@
 #include "public.sdk/source/vst/utility/stringconvert.h"
 
 using namespace Steinberg;
+
+// Global verbosity level
+static int verbosity = 0;
 
 // VST3 host application implementation - provides context for plugins
 class VstHostApplication : public Vst::IHostApplication {
@@ -60,7 +64,9 @@ FUnknown* gStandardPluginContext = new VstHostApplication();
 
 // Scans a VST3 plugin bundle and displays its information
 void scan_vst3_plugin(const std::string& pluginPath) {
-  std::cout << "Scanning: " << pluginPath << std::endl;
+  if (verbosity >= 1) {
+    std::cout << "Scanning: " << pluginPath << std::endl;
+  }
 
   // Load the VST3 module
   std::string errorDescription;
@@ -77,16 +83,22 @@ void scan_vst3_plugin(const std::string& pluginPath) {
   auto factory = module->getFactory();
   auto factoryInfo = factory.info();
 
-  std::cout << "Module: " << module->getName() << std::endl;
-  std::cout << "Vendor: " << factoryInfo.vendor() << std::endl;
+  if (verbosity >= 1) {
+    std::cout << "Module: " << module->getName() << std::endl;
+    std::cout << "Vendor: " << factoryInfo.vendor() << std::endl;
+  }
 
   // Enumerate audio effect plugins in this module
   for (auto& classInfo : factory.classInfos()) {
     if (classInfo.category() == kVstAudioEffectClass) {
       std::cout << "Found VST3 plugin: " << classInfo.name() << std::endl;
-      std::cout << "  Vendor: " << classInfo.vendor() << std::endl;
-      std::cout << "  Version: " << classInfo.version() << std::endl;
-      std::cout << "  SDK Version: " << classInfo.sdkVersion() << std::endl;
+      if (verbosity >= 1) {
+        std::cout << "  Vendor: " << classInfo.vendor() << std::endl;
+        std::cout << "  Version: " << classInfo.version() << std::endl;
+        if (verbosity >= 2) {
+          std::cout << "  SDK Version: " << classInfo.sdkVersion() << std::endl;
+        }
+      }
     }
   }
 }
@@ -121,25 +133,52 @@ void show_example_paths() {
 }
 
 int main(int argc, char* argv[]) {
-  std::cout << "VST Shill - Minimal VST3 Host" << std::endl;
-  std::cout << "=============================" << std::endl;
+  args::ArgumentParser parser("VST Shill - Minimal VST3 Host",
+                              "Scans and loads VST3 plugins");
+  args::CounterFlag verbose(parser, "verbose", "Increase verbosity level",
+                            {'v', "verbose"});
+  args::Positional<std::string> plugin_path(parser, "plugin_path",
+                                            "Path to VST3 plugin to scan");
 
-  if (argc > 1) {
+  try {
+    parser.ParseCLI(argc, argv);
+  } catch (args::Help) {
+    std::cout << parser;
+    return 0;
+  } catch (args::ParseError e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+
+  verbosity = args::get(verbose);
+
+  if (verbosity >= 1) {
+    std::cout << "VST Shill - Minimal VST3 Host" << std::endl;
+    std::cout << "=============================" << std::endl;
+    std::cout << "Verbosity level: " << verbosity << std::endl;
+  }
+
+  if (plugin_path) {
     // Scan specific plugin provided as argument
-    scan_vst3_plugin(argv[1]);
+    scan_vst3_plugin(args::get(plugin_path));
   } else {
     // Show usage and scan common directories
-    std::cout << "Usage: " << argv[0] << " <plugin_path>" << std::endl;
+    std::cout << "Usage: " << argv[0] << " [-v] <plugin_path>" << std::endl;
     show_example_paths();
 
-    std::cout << std::endl << "Common VST3 directories:" << std::endl;
-    for (const auto& path : get_vst3_search_paths()) {
-      if (!path.empty()) {
-        std::cout << "  " << path << std::endl;
+    if (verbosity >= 1) {
+      std::cout << std::endl << "Common VST3 directories:" << std::endl;
+      for (const auto& path : get_vst3_search_paths()) {
+        if (!path.empty()) {
+          std::cout << "  " << path << std::endl;
+        }
       }
     }
   }
 
-  std::cout << std::endl << "Host initialized successfully!" << std::endl;
+  if (verbosity >= 1) {
+    std::cout << std::endl << "Host initialized successfully!" << std::endl;
+  }
   return 0;
 }
