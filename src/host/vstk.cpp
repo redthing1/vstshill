@@ -1,4 +1,5 @@
 #include "vstk.hpp"
+#include "parameter.hpp"
 #include "platform/platform_gui.hpp"
 
 #include <algorithm>
@@ -38,6 +39,9 @@ HostContext& HostContext::instance() {
 Plugin::Plugin(const redlog::logger& logger)
     : _log(logger.with_name("plugin")) {
   _log.trc("plugin instance created");
+
+  // initialize parameter manager
+  _parameter_manager = std::make_unique<ParameterManager>(*this);
 
   // initialize sdl for gui support
   static bool sdl_initialized = false;
@@ -143,6 +147,12 @@ Result<bool> Plugin::load(const std::string& plugin_path,
         return bus_result;
       }
 
+      // activate default buses before component activation
+      auto bus_activate_result = activate_default_buses();
+      if (!bus_activate_result) {
+        return bus_activate_result;
+      }
+
       // configure processing
       auto config_result = configure_processing();
       if (!config_result) {
@@ -154,6 +164,14 @@ Result<bool> Plugin::load(const std::string& plugin_path,
         return Result<bool>("Failed to activate plugin component");
       }
       _is_active = true;
+
+      // discover parameters after successful initialization
+      if (_edit_controller && !_parameter_manager->discover_parameters()) {
+        _log.warn("failed to discover plugin parameters");
+      } else if (_edit_controller) {
+        _log.trc("discovered parameters", 
+                 redlog::field("parameter_count", _parameter_manager->parameters().size()));
+      }
 
       _log.inf("plugin loaded successfully", redlog::field("name", _info.name));
       break;
@@ -277,6 +295,49 @@ Result<bool> Plugin::setup_buses() {
   return Result<bool>(true);
 }
 
+Result<bool> Plugin::activate_default_buses() {
+  if (!_component) {
+    return Result<bool>("No component available");
+  }
+
+  _log.trc("activating default buses before component activation");
+
+  // activate first input bus if available
+  if (!_info.audio_inputs.empty()) {
+    tresult result = _component->activateBus(kAudio, kInput, 0, true);
+    if (result != kResultOk) {
+      return Result<bool>("Failed to activate default input bus");
+    }
+    _info.audio_inputs[0].is_active = true;
+    _log.trc("activated default input bus");
+  }
+
+  // activate first output bus if available  
+  if (!_info.audio_outputs.empty()) {
+    tresult result = _component->activateBus(kAudio, kOutput, 0, true);
+    if (result != kResultOk) {
+      return Result<bool>("Failed to activate default output bus");
+    }
+    _info.audio_outputs[0].is_active = true;
+    _log.trc("activated default output bus");
+  }
+
+  // activate first event input bus if available
+  if (!_info.event_inputs.empty()) {
+    tresult result = _component->activateBus(kEvent, kInput, 0, true);
+    if (result != kResultOk) {
+      _log.warn("failed to activate default event input bus");
+      // don't fail, event buses are optional
+    } else {
+      _info.event_inputs[0].is_active = true;
+      _log.trc("activated default event input bus");
+    }
+  }
+
+  _log.trc("default bus activation completed");
+  return Result<bool>(true);
+}
+
 Result<bool> Plugin::configure_processing() {
   if (!_audio_processor) {
     return Result<bool>("No audio processor available");
@@ -319,11 +380,18 @@ Result<bool> Plugin::configure_processing() {
 
   // setup event lists
   if (!_info.event_inputs.empty()) {
+    _log.trc("allocating input event lists", 
+             redlog::field("event_input_count", _info.event_inputs.size()));
     _input_events = std::make_unique<EventList[]>(_info.event_inputs.size());
     _process_data.inputEvents = _input_events.get();
+    _log.trc("input event lists allocated successfully");
+  } else {
+    _log.trc("no event inputs detected - skipping event list allocation");
   }
 
   if (!_info.event_outputs.empty()) {
+    _log.trc("allocating output event lists", 
+             redlog::field("event_output_count", _info.event_outputs.size()));
     _output_events = std::make_unique<EventList[]>(_info.event_outputs.size());
     _process_data.outputEvents = _output_events.get();
   }
@@ -355,18 +423,97 @@ Result<bool> Plugin::prepare_processing() {
   return Result<bool>(true);
 }
 
+Result<bool> Plugin::refresh_audio_buffers() {
+  if (!is_loaded()) {
+    return Result<bool>("Plugin not loaded");
+  }
+
+  _log.trc("refreshing audio buffers after bus activation");
+  
+  // re-setup processing with activated bus configuration
+  tresult result = _audio_processor->setupProcessing(_process_setup);
+  if (result != kResultOk) {
+    _log.error("failed to re-setup processing after bus activation", 
+               redlog::field("result", static_cast<int>(result)));
+    return Result<bool>("Failed to re-setup processing after bus activation");
+  }
+  
+  // re-prepare process data with current bus configuration
+  // this ensures buffers are allocated for active buses
+  _process_data.prepare(*_component, _config.max_block_size,
+                        static_cast<int32>(_config.sample_size));
+                        
+  _log.trc("audio buffers refreshed successfully");
+  return Result<bool>(true);
+}
+
 Result<bool> Plugin::start_processing() {
   auto prepare_result = prepare_processing();
   if (!prepare_result) {
     return prepare_result;
   }
 
-  if (_audio_processor->setProcessing(true) != kResultOk) {
-    return Result<bool>("Failed to start processing");
+  // Follow Steinberg's official VST3 SDK pattern (audioclient.cpp lines 348-378)
+  _log.trc("stopping any existing processing before restart");
+  if (_is_processing && _audio_processor) {
+    _audio_processor->setProcessing(false);
+    _is_processing = false;
+  }
+  if (_is_active && _component) {
+    _component->setActive(false);
+    _is_active = false;
   }
 
-  _is_processing = true;
-  _log.dbg("processing started");
+  // Setup processing configuration (Steinberg's exact approach)
+  ProcessSetup setup {static_cast<int32>(_config.process_mode), 
+                     static_cast<int32>(_config.sample_size),
+                     _config.max_block_size, 
+                     static_cast<SampleRate>(_config.sample_rate)};
+  
+  _log.trc("calling setupProcessing with Steinberg's pattern");
+  if (_audio_processor->setupProcessing(setup) != kResultOk) {
+    return Result<bool>("Failed to setup processing");
+  }
+
+  // Activate component (always check this return value)
+  _log.trc("activating component");
+  if (_component->setActive(true) != kResultOk) {
+    return Result<bool>("Failed to activate component");
+  }
+  _is_active = true;
+
+  // Prepare process data AFTER component is active (Steinberg's pattern)
+  _log.trc("preparing process data after activation");
+  _process_data.prepare(*_component, _config.max_block_size, static_cast<int32>(_config.sample_size));
+  
+  // Re-setup event lists after prepare (prepare() may clear inputEvents/outputEvents)
+  // Force re-allocation of event lists if needed
+  if (!_info.event_inputs.empty()) {
+    if (!_input_events) {
+      _log.trc("re-allocating input event lists after prepare", 
+               redlog::field("event_input_count", _info.event_inputs.size()));
+      _input_events = std::make_unique<EventList[]>(_info.event_inputs.size());
+    }
+    _process_data.inputEvents = _input_events.get();
+    _log.trc("restored input event list after prepare");
+  }
+  if (!_info.event_outputs.empty()) {
+    if (!_output_events) {
+      _log.trc("re-allocating output event lists after prepare", 
+               redlog::field("event_output_count", _info.event_outputs.size()));
+      _output_events = std::make_unique<EventList[]>(_info.event_outputs.size());
+    }
+    _process_data.outputEvents = _output_events.get();
+    _log.trc("restored output event list after prepare");
+  }
+
+  // Start processing - IGNORE RETURN VALUE like Steinberg's official examples do!
+  // From audioclient.cpp: processor->setProcessing(true); // != kResultOk (commented out error check)
+  _log.trc("calling setProcessing(true) - ignoring return value per VST3 SDK pattern");
+  _audio_processor->setProcessing(true);  // Deliberately ignore return value
+  
+  _is_processing = true;  // Assume success like Steinberg does
+  _log.dbg("processing started using Steinberg's pattern", redlog::field("_is_processing", _is_processing));
   return Result<bool>(true);
 }
 
@@ -492,10 +639,48 @@ Sample64* Plugin::get_audio_buffer_64(BusDirection direction, int32_t bus_index,
 EventList* Plugin::get_event_list(BusDirection direction,
                                   int32_t bus_index) const {
   if (direction == BusDirection::Input && _input_events) {
-    return &_input_events[bus_index];
+    // add bounds checking for event input buses
+    if (bus_index >= 0 && bus_index < static_cast<int32_t>(_info.event_inputs.size())) {
+      _log.dbg("returning event input list", 
+               redlog::field("bus_index", bus_index),
+               redlog::field("total_event_inputs", _info.event_inputs.size()));
+      return &_input_events[bus_index];
+    } else {
+      _log.warn("event input bus index out of bounds", 
+                redlog::field("requested_index", bus_index),
+                redlog::field("total_event_inputs", _info.event_inputs.size()));
+      return nullptr;
+    }
   } else if (direction == BusDirection::Output && _output_events) {
-    return &_output_events[bus_index];
+    // add bounds checking for event output buses
+    if (bus_index >= 0 && bus_index < static_cast<int32_t>(_info.event_outputs.size())) {
+      _log.dbg("returning event output list", 
+               redlog::field("bus_index", bus_index),
+               redlog::field("total_event_outputs", _info.event_outputs.size()));
+      return &_output_events[bus_index];
+    } else {
+      _log.warn("event output bus index out of bounds", 
+                redlog::field("requested_index", bus_index),
+                redlog::field("total_event_outputs", _info.event_outputs.size()));
+      return nullptr;
+    }
   }
+  
+  // log detailed reason for returning nullptr
+  if (direction == BusDirection::Input) {
+    if (!_input_events) {
+      _log.warn("no event input list available - _input_events is null",
+                redlog::field("bus_index", bus_index),
+                redlog::field("event_inputs_count", _info.event_inputs.size()));
+    }
+  } else {
+    if (!_output_events) {
+      _log.warn("no event output list available - _output_events is null",
+                redlog::field("bus_index", bus_index),
+                redlog::field("event_outputs_count", _info.event_outputs.size()));
+    }
+  }
+  
   return nullptr;
 }
 
@@ -520,6 +705,14 @@ Result<std::unique_ptr<GuiWindow>> Plugin::create_editor_window() {
   }
 
   return Result<std::unique_ptr<GuiWindow>>(std::move(window));
+}
+
+ParameterManager& Plugin::parameters() {
+  return *_parameter_manager;
+}
+
+const ParameterManager& Plugin::parameters() const {
+  return *_parameter_manager;
 }
 
 void Plugin::reset_state() {
@@ -937,14 +1130,26 @@ void setup_process_context(ProcessContext& context, double sample_rate,
                            int32_t time_sig_denominator) {
   std::memset(&context, 0, sizeof(ProcessContext));
 
-  context.state = ProcessContext::kPlaying;
+  // Essential state flags for synthesizer compatibility (VST3 SDK pattern)
+  context.state = ProcessContext::kPlaying |
+                  ProcessContext::kTempoValid |
+                  ProcessContext::kTimeSigValid |
+                  ProcessContext::kProjectTimeMusicValid |
+                  ProcessContext::kContTimeValid;
+  
   context.sampleRate = sample_rate;
   context.projectTimeSamples = sample_position;
-  context.systemTime = 0; // could be set to actual system time if needed
-  context.continousTimeSamples = sample_position;
-  context.projectTimeMusic =
-      static_cast<double>(sample_position) / sample_rate * (tempo / 60.0);
-  context.barPositionMusic = 0.0;
+  context.systemTime = 0;
+  context.continousTimeSamples = sample_position; // Critical for synthesizers
+  
+  // Musical timing calculations (VST3 SDK pattern)
+  double samples_per_quarter_note = 60.0 * sample_rate / tempo;
+  context.projectTimeMusic = static_cast<double>(sample_position) / samples_per_quarter_note;
+  
+  // Bar position for 4/4 time (VST3 SDK standard)
+  double quarter_notes_per_bar = time_sig_numerator * (4.0 / time_sig_denominator);
+  context.barPositionMusic = fmod(context.projectTimeMusic, quarter_notes_per_bar);
+  
   context.cycleStartMusic = 0.0;
   context.cycleEndMusic = 0.0;
   context.tempo = tempo;
@@ -953,6 +1158,21 @@ void setup_process_context(ProcessContext& context, double sample_rate,
   context.chord = {0}; // no chord info
   context.smpteOffsetSubframes = 0;
   context.frameRate = {};
+}
+
+void update_process_context(ProcessContext& context, int32_t block_size) {
+  // Update continuous time samples (VST3 SDK pattern)
+  context.continousTimeSamples += block_size;
+  context.projectTimeSamples += block_size;
+  
+  // Update musical time position (VST3 SDK calculation)
+  double samples_per_quarter_note = 60.0 * context.sampleRate / context.tempo;
+  double quarter_notes_this_block = static_cast<double>(block_size) / samples_per_quarter_note;
+  context.projectTimeMusic += quarter_notes_this_block;
+  
+  // Update bar position for 4/4 time (VST3 SDK pattern)
+  double quarter_notes_per_bar = context.timeSigNumerator * (4.0 / context.timeSigDenominator);
+  context.barPositionMusic = fmod(context.projectTimeMusic, quarter_notes_per_bar);
 }
 
 void interleave_audio(const std::vector<Sample32*>& channels,

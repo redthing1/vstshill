@@ -29,6 +29,7 @@ endif()
 # third-party dependencies
 add_subdirectory(lib/vst3sdk)
 add_subdirectory(lib/redlog_cpp)
+add_subdirectory(lib/libsndfile)
 
 # Find SDL2 cross-platform
 find_package(SDL2 CONFIG QUIET)
@@ -44,8 +45,21 @@ endif()
 set(vstshill_sources 
     src/main.cpp
     src/host/vstk.cpp
+    src/host/parameter.cpp
     src/host/minimal.cpp
     src/util/vst_discovery.cpp
+    src/automation/automation.cpp
+    src/util/string_utils.cpp
+    src/util/audio_utils.cpp
+    src/util/midi_utils.cpp
+    src/audio/audio_io.cpp
+    src/audio/sdl_audio.cpp
+    src/commands/command.cpp
+    src/commands/scan_command.cpp
+    src/commands/inspect_command.cpp
+    src/commands/parameters_command.cpp
+    src/commands/gui_command.cpp
+    src/commands/process_command.cpp
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )
 
@@ -76,6 +90,7 @@ add_executable(vstshill ${vstshill_sources})
 target_link_libraries(vstshill PRIVATE 
     sdk_hosting 
     redlog::redlog
+    sndfile
     ${SDL2_LIBRARIES}
 )
 
@@ -122,3 +137,19 @@ set_target_properties(vstshill PROPERTIES
     OUTPUT_NAME "vstshill"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# clang-format targets
+find_program(CLANG_FORMAT "clang-format")
+if(CLANG_FORMAT)
+    add_custom_target(format
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format.cmake
+        COMMENT "Formatting source code with clang-format"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    
+    add_custom_target(format-check
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.cmake
+        COMMENT "Checking code formatting with clang-format"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endif()

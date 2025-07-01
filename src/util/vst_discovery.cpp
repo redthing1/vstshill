@@ -26,14 +26,14 @@ std::vector<std::string> get_vst3_search_paths() {
   }
 
 #elif defined(_WIN32)
-  // system-wide plugins (Program Files)
+  // system-wide plugins (program files)
   if (const char* pf = std::getenv("PROGRAMFILES")) {
     paths.push_back(std::string(pf) + "\\Common Files\\VST3");
   } else {
     paths.push_back("C:\\Program Files\\Common Files\\VST3");
   }
 
-  // system-wide plugins (Program Files x86)
+  // system-wide plugins (program files x86)
   if (const char* pf86 = std::getenv("PROGRAMFILES(X86)")) {
     paths.push_back(std::string(pf86) + "\\Common Files\\VST3");
   }

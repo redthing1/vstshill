@@ -1,0 +1,32 @@
+#include "inspect_command.hpp"
+#include "../host/minimal.hpp"
+#include <iostream>
+#include <redlog/redlog.hpp>
+
+extern redlog::logger log_main;
+extern void apply_verbosity();
+
+namespace vstk {
+
+InspectCommand::InspectCommand(args::Subparser& parser)
+    : parser_(parser),
+      plugin_path_(parser, "plugin_path", "path to vst3 plugin to inspect") {}
+
+int InspectCommand::execute() {
+  apply_verbosity();
+
+  parser_.Parse();
+
+  if (!plugin_path_) {
+    log_main.error("plugin path required for inspect command");
+    std::cerr << parser_;
+    return 1;
+  }
+
+  vstk::host::MinimalHost host(log_main);
+  host.inspect_plugin(args::get(plugin_path_));
+
+  return 0;
+}
+
+} // namespace vstk
