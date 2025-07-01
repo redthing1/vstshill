@@ -30,8 +30,12 @@ endif()
 add_subdirectory(lib/vst3sdk)
 add_subdirectory(lib/redlog_cpp)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDL2 REQUIRED sdl2)
+# Find SDL2 cross-platform
+find_package(SDL2 REQUIRED)
+if(NOT SDL2_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED sdl2)
+endif()
 
 # source files
 set(vstshill_sources 
