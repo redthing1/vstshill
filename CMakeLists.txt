@@ -82,6 +82,7 @@ target_link_libraries(vstshill PRIVATE
 # Windows-specific compile definitions
 if(WIN32)
     target_compile_definitions(vstshill PRIVATE _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING)
+    target_compile_definitions(sdk_hosting PRIVATE _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING)
 endif()
 
 # include directories
