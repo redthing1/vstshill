@@ -79,6 +79,11 @@ target_link_libraries(vstshill PRIVATE
     ${SDL2_LIBRARIES}
 )
 
+# Windows-specific compile definitions
+if(WIN32)
+    target_compile_definitions(vstshill PRIVATE _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING)
+endif()
+
 # include directories
 target_include_directories(vstshill PRIVATE 
     src
