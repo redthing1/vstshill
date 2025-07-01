@@ -13,3 +13,6 @@
 [submodule "lib/redlog_cpp"]
 	path = lib/redlog_cpp
 	url = https://github.com/redthing1/redlog_cpp.git
+[submodule "lib/libsndfile"]
+	path = lib/libsndfile
+	url = https://github.com/libsndfile/libsndfile.git

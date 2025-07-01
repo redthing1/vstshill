@@ -141,6 +141,7 @@ struct PluginInfo {
 // forward declarations
 class Plugin;
 class GuiWindow;
+class ParameterManager;
 
 // raii wrapper for vst3 host context - singleton pattern
 class HostContext {
@@ -161,6 +162,7 @@ private:
 // supports both audio processing and gui editor functionality
 class Plugin {
   friend class GuiWindow;
+  friend class ParameterManager;
 
 public:
   explicit Plugin(
@@ -215,6 +217,10 @@ public:
     return &_process_context;
   }
 
+  // parameter management
+  class ParameterManager& parameters();
+  const class ParameterManager& parameters() const;
+
   // gui support
   Result<std::unique_ptr<GuiWindow>> create_editor_window();
   bool has_editor() const { return _edit_controller != nullptr; }
@@ -249,6 +255,9 @@ private:
   std::vector<Steinberg::Vst::SpeakerArrangement> _output_arrangements;
   std::unique_ptr<Steinberg::Vst::EventList[]> _input_events;
   std::unique_ptr<Steinberg::Vst::EventList[]> _output_events;
+
+  // parameter management
+  std::unique_ptr<ParameterManager> _parameter_manager;
 };
 
 // iplugframe implementation for handling plugin resize requests

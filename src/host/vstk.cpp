@@ -1,4 +1,5 @@
 #include "vstk.hpp"
+#include "parameter.hpp"
 #include "platform/platform_gui.hpp"
 
 #include <algorithm>
@@ -38,6 +39,9 @@ HostContext& HostContext::instance() {
 Plugin::Plugin(const redlog::logger& logger)
     : _log(logger.with_name("plugin")) {
   _log.trc("plugin instance created");
+
+  // initialize parameter manager
+  _parameter_manager = std::make_unique<ParameterManager>(*this);
 
   // initialize sdl for gui support
   static bool sdl_initialized = false;
@@ -154,6 +158,14 @@ Result<bool> Plugin::load(const std::string& plugin_path,
         return Result<bool>("Failed to activate plugin component");
       }
       _is_active = true;
+
+      // discover parameters after successful initialization
+      if (_edit_controller && !_parameter_manager->discover_parameters()) {
+        _log.warn("failed to discover plugin parameters");
+      } else if (_edit_controller) {
+        _log.trc("discovered parameters", 
+                 redlog::field("parameter_count", _parameter_manager->parameters().size()));
+      }
 
       _log.inf("plugin loaded successfully", redlog::field("name", _info.name));
       break;
@@ -520,6 +532,14 @@ Result<std::unique_ptr<GuiWindow>> Plugin::create_editor_window() {
   }
 
   return Result<std::unique_ptr<GuiWindow>>(std::move(window));
+}
+
+ParameterManager& Plugin::parameters() {
+  return *_parameter_manager;
+}
+
+const ParameterManager& Plugin::parameters() const {
+  return *_parameter_manager;
 }
 
 void Plugin::reset_state() {

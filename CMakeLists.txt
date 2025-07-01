@@ -29,6 +29,7 @@ endif()
 # third-party dependencies
 add_subdirectory(lib/vst3sdk)
 add_subdirectory(lib/redlog_cpp)
+add_subdirectory(lib/libsndfile)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SDL2 REQUIRED sdl2)
@@ -37,8 +38,12 @@ pkg_check_modules(SDL2 REQUIRED sdl2)
 set(vstshill_sources 
     src/main.cpp
     src/host/vstk.cpp
+    src/host/parameter.cpp
     src/host/minimal.cpp
     src/util/vst_discovery.cpp
+    src/automation/automation.cpp
+    src/util/string_utils.cpp
+    src/audio/audio_io.cpp
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )
 
@@ -69,6 +74,7 @@ add_executable(vstshill ${vstshill_sources})
 target_link_libraries(vstshill PRIVATE 
     sdk_hosting 
     redlog::redlog
+    sndfile
     ${SDL2_LIBRARIES}
 )
 

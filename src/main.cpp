@@ -9,6 +9,7 @@
 
 #include "host/minimal.hpp"
 #include "host/vstk.hpp"
+#include "host/parameter.hpp"
 #include "util/vst_discovery.hpp"
 
 args::Group arguments("arguments");
@@ -198,6 +199,86 @@ void cmd_scan(args::Subparser& parser) {
   }
 }
 
+void cmd_parameters(args::Subparser& parser) {
+  apply_verbosity();
+
+  args::Positional<std::string> plugin_path(parser, "plugin_path",
+                                            "path to vst3 plugin to analyze parameters");
+  parser.Parse();
+
+  if (!plugin_path) {
+    log_main.error("plugin path required for parameters command");
+    std::cerr << parser;
+    return;
+  }
+
+  try {
+    // Create a plugin instance
+    vstk::Plugin plugin(log_main);
+    
+    // Load the plugin
+    auto result = plugin.load(args::get(plugin_path));
+    if (!result) {
+      log_main.error("failed to load plugin", redlog::field("error", result.error()));
+      return;
+    }
+    
+    log_main.info("plugin loaded successfully", redlog::field("name", plugin.name()));
+    
+    // test parameter discovery
+    const auto& params = plugin.parameters().parameters();
+    log_main.info("parameter discovery", redlog::field("parameter_count", params.size()));
+    
+    if (params.empty()) {
+      log_main.info("no parameters found in plugin");
+      return;
+    }
+    
+    // show all parameters
+    for (size_t i = 0; i < params.size(); ++i) {
+      const auto& param = params[i];
+      
+      log_main.info("parameter details",
+                    redlog::field("index", i),
+                    redlog::field("name", param.name),
+                    redlog::field("id", param.id),
+                    redlog::field("discrete", param.is_discrete),
+                    redlog::field("text_conversion", param.supports_text_conversion),
+                    redlog::field("default_value", param.default_normalized_value));
+      
+      // get current values
+      auto current_norm = plugin.parameters().get_parameter_normalized(param.name);
+      auto current_text = plugin.parameters().get_parameter_text(param.name);
+      
+      if (current_norm) {
+        log_main.debug("parameter values",
+                       redlog::field("parameter", param.name),
+                       redlog::field("normalized", *current_norm),
+                       redlog::field("text", current_text.value_or("(no text)")));
+      }
+      
+      // if discrete, show available values
+      if (param.is_discrete && !param.value_strings.empty()) {
+        std::string values_list;
+        for (size_t j = 0; j < std::min(param.value_strings.size(), size_t(5)); ++j) {
+          if (j > 0) values_list += ", ";
+          values_list += param.value_strings[j];
+        }
+        if (param.value_strings.size() > 5) {
+          values_list += " ...";
+        }
+        
+        log_main.debug("discrete values",
+                       redlog::field("parameter", param.name),
+                       redlog::field("values", values_list));
+      }
+    }
+    
+  } catch (const std::exception& e) {
+    log_main.error("exception during parameter analysis", redlog::field("what", e.what()));
+  }
+}
+
 int main(int argc, char* argv[]) {
   args::ArgumentParser parser("vstshill - cross-platform vst3 host",
                               "analyze, host, and process vst3 plugins");
@@ -217,6 +298,8 @@ int main(int argc, char* argv[]) {
   args::Command scan_cmd(commands, "scan",
                          "scan for vst3 plugins in standard directories",
                          &cmd_scan);
+  args::Command parameters_cmd(commands, "parameters",
+                              "analyze and list plugin parameters", &cmd_parameters);
 
   try {
     parser.ParseCLI(argc, argv);
