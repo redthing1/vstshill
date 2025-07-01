@@ -7,6 +7,14 @@ this will support cli, gui, and offline loading and inspection of plugins.
 
 ## build
 
+## macos
+
+make sure xcode cli tools are set up, then build:
+```sh
+cmake -G Ninja -B build-macos
+cmake --build build-macos --parallel
+```
+
 ## windows
 
 use vcpkg to install sdl2:
