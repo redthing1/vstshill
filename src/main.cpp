@@ -3,6 +3,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <chrono>
+#include <algorithm>
+#include <filesystem>
 
 #include "ext/args.hpp"
 #include <redlog/redlog.hpp>
@@ -10,7 +14,14 @@
 #include "host/minimal.hpp"
 #include "host/vstk.hpp"
 #include "host/parameter.hpp"
+#include "host/constants.hpp"
 #include "util/vst_discovery.hpp"
+#include "util/audio_utils.hpp"
+#include "util/midi_utils.hpp"
+#include "automation/automation.hpp"
+#include "audio/audio_io.hpp"
+
+#include <pluginterfaces/vst/ivstevents.h>
 
 args::Group arguments("arguments");
 args::HelpFlag help_flag(arguments, "help", "help", {'h', "help"});
@@ -78,36 +89,414 @@ void open_plugin_gui(const std::string& plugin_path) {
   log.inf("gui session ended");
 }
 
-void process_audio_file(const std::string& input_file,
+namespace {
+
+// setup audio input configuration and return total frames to process
+size_t setup_audio_input(const std::vector<std::string>& input_files,
+                         vstk::MultiAudioReader& audio_reader,
+                         double& sample_rate,
+                         double requested_sample_rate,
+                         double custom_duration,
+                         const redlog::logger& log) {
+  if (!input_files.empty()) {
+    log.inf("loading input files", redlog::field("count", input_files.size()));
+    
+    for (const auto& input_file : input_files) {
+      if (!audio_reader.add_file(input_file)) {
+        log.error("failed to load input file", redlog::field("file", input_file));
+        return 0;
+      }
+      log.trc("loaded input file", redlog::field("file", input_file));
+    }
+    
+    if (sample_rate == 0.0) {
+      sample_rate = audio_reader.sample_rate();
+    }
+    size_t total_frames = audio_reader.max_frames();
+    
+    log.inf("audio input configured",
+            redlog::field("sample_rate", sample_rate),
+            redlog::field("total_channels", audio_reader.total_channels()),
+            redlog::field("total_frames", total_frames));
+    return total_frames;
+  } else {
+    // instrument mode - no input files
+    if (sample_rate == 0.0) {
+      sample_rate = vstk::constants::DEFAULT_SAMPLE_RATE;
+    }
+    double duration = custom_duration > 0.0 ? custom_duration : vstk::constants::DEFAULT_INSTRUMENT_DURATION_SECONDS;
+    size_t total_frames = static_cast<size_t>(sample_rate * duration);
+    log.inf("instrument mode - no audio input",
+            redlog::field("sample_rate", sample_rate),
+            redlog::field("duration_seconds", duration));
+    return total_frames;
+  }
+}
+
+// parse and apply individual parameter settings
+void apply_parameter_settings(vstk::Plugin& plugin,
+                             const std::vector<std::string>& parameters,
+                             const redlog::logger& log) {
+  for (const auto& param_str : parameters) {
+    auto colon_pos = param_str.find(':');
+    if (colon_pos == std::string::npos) {
+      log.warn("invalid parameter format, expected name:value", 
+               redlog::field("parameter", param_str));
+      continue;
+    }
+    
+    std::string param_name = param_str.substr(0, colon_pos);
+    std::string param_value = param_str.substr(colon_pos + 1);
+    
+    vstk::ParameterValue value(param_value);
+    if (!plugin.parameters().set_parameter(param_name, value)) {
+      log.warn("failed to set parameter", 
+               redlog::field("name", param_name),
+               redlog::field("value", param_value));
+    } else {
+      log.trc("set parameter",
+              redlog::field("name", param_name), 
+              redlog::field("value", param_value));
+    }
+  }
+}
+
+// add MIDI note-on event for instrument plugins
+void add_instrument_midi_event(vstk::Plugin& plugin, 
+                              double sample_rate,
+                              const redlog::logger& log) {
+  auto* event_list = plugin.get_event_list(vstk::BusDirection::Input, 0);
+  if (event_list) {
+    auto event = vstk::util::create_note_on_event(
+      vstk::constants::MIDI_MIDDLE_C,
+      vstk::constants::MIDI_DEFAULT_VELOCITY,
+      vstk::constants::MIDI_DEFAULT_CHANNEL,
+      vstk::constants::MIDI_NOTE_DURATION_SECONDS,
+      sample_rate
+    );
+    
+    auto add_result = event_list->addEvent(event);
+    log.inf("added MIDI note-on event", 
+            redlog::field("pitch", event.noteOn.pitch),
+            redlog::field("velocity", event.noteOn.velocity),
+            redlog::field("add_result", static_cast<int>(add_result)));
+  } else {
+    log.warn("no event list available for MIDI input");
+  }
+}
+
+// apply parameter automation for current frame position
+void apply_parameter_automation(vstk::Plugin& plugin,
+                               const vstk::ParameterAutomation& automation,
+                               size_t frame_position,
+                               const redlog::logger& log) {
+  if (!automation.empty()) {
+    auto param_values = vstk::Automation::get_parameter_values(automation, frame_position);
+    for (const auto& [param_name, value] : param_values) {
+      vstk::ParameterValue param_value(value);
+      plugin.parameters().set_parameter(param_name, param_value);
+    }
+  }
+}
+
+// convert input audio from interleaved to plugin's planar format
+void prepare_plugin_input_audio(vstk::Plugin& plugin,
+                                const vstk::MultiAudioReader& audio_reader,
+                                const float* input_buffer,
+                                size_t frames_to_process,
+                                int output_channels) {
+  auto* input_left = plugin.get_audio_buffer_32(vstk::BusDirection::Input, 0, 0);
+  auto* input_right = plugin.get_audio_buffer_32(vstk::BusDirection::Input, 0, 1);
+  
+  if (input_left && (output_channels == 1 || input_right)) {
+    int input_channels = std::min(audio_reader.total_channels(), 2);
+    
+    if (input_channels == 1) {
+      // mono input - copy to left channel
+      for (size_t i = 0; i < frames_to_process; ++i) {
+        input_left[i] = input_buffer[i];
+        if (input_right) input_right[i] = input_buffer[i]; // duplicate to stereo
+      }
+    } else {
+      // stereo input - deinterleave
+      for (size_t i = 0; i < frames_to_process; ++i) {
+        input_left[i] = input_buffer[i * 2];
+        if (input_right) input_right[i] = input_buffer[i * 2 + 1];
+      }
+    }
+  }
+}
+
+// convert plugin's planar output to interleaved format
+void collect_plugin_output_audio(vstk::Plugin& plugin,
+                                 float* output_buffer,
+                                 size_t frames_to_process,
+                                 int output_channels,
+                                 const redlog::logger& log) {
+  auto* output_left = plugin.get_audio_buffer_32(vstk::BusDirection::Output, 0, 0);
+  auto* output_right = plugin.get_audio_buffer_32(vstk::BusDirection::Output, 0, 1);
+  
+  if (output_left && (output_channels == 1 || output_right)) {
+    if (output_channels == 1) {
+      // mono output
+      for (size_t i = 0; i < frames_to_process; ++i) {
+        output_buffer[i] = output_left[i];
+      }
+    } else {
+      // stereo output - interleave
+      for (size_t i = 0; i < frames_to_process; ++i) {
+        output_buffer[i * 2] = output_left[i];
+        output_buffer[i * 2 + 1] = output_right ? output_right[i] : output_left[i];
+      }
+    }
+  } else {
+    log.warn("failed to access plugin output buffers");
+    // output buffer will remain cleared (zeros)
+  }
+}
+
+} // anonymous namespace
+
+void process_audio_file(const std::vector<std::string>& input_files,
                         const std::string& output_file,
-                        const std::string& plugin_path) {
+                        const std::string& plugin_path,
+                        const std::string& automation_file,
+                        const std::vector<std::string>& parameters,
+                        double requested_sample_rate,
+                        int block_size,
+                        int bit_depth,
+                        bool overwrite,
+                        double custom_duration = 0.0) {
   apply_verbosity();
 
   auto log = log_main.with_name("processor");
-  log.inf("processing audio file", redlog::field("input", input_file),
-          redlog::field("output", output_file),
-          redlog::field("plugin", plugin_path));
+  
+  try {
+    // check if output file exists
+    if (!overwrite && std::ifstream(output_file)) {
+      log.error("output file already exists (use --overwrite to replace)",
+                redlog::field("output", output_file));
+      return;
+    }
 
-  vstk::Plugin plugin(log);
-  vstk::PluginConfig config;
-  config.with_process_mode(vstk::ProcessMode::Offline)
-      .with_sample_rate(44100)
-      .with_block_size(512);
+    // setup audio input
+    vstk::MultiAudioReader audio_reader;
+    double sample_rate = requested_sample_rate;
+    size_t total_frames = setup_audio_input(input_files, audio_reader, sample_rate, 
+                                           requested_sample_rate, custom_duration, log);
+    if (total_frames == 0) {
+      return; // error already logged
+    }
 
-  auto load_result = plugin.load(plugin_path, config);
-  if (!load_result) {
-    log.error("failed to load plugin",
-              redlog::field("error", load_result.error()));
-    return;
+    // load plugin
+    log.inf("loading plugin", redlog::field("path", plugin_path));
+    vstk::Plugin plugin(log);
+    vstk::PluginConfig config;
+    config.with_process_mode(vstk::ProcessMode::Offline)
+          .with_sample_rate(sample_rate)
+          .with_block_size(block_size);
+
+    auto load_result = plugin.load(plugin_path, config);
+    if (!load_result) {
+      log.error("failed to load plugin", redlog::field("error", load_result.error()));
+      return;
+    }
+
+    log.inf("plugin loaded successfully", redlog::field("name", plugin.name()));
+
+    // apply parameter settings
+    apply_parameter_settings(plugin, parameters, log);
+
+    // parse automation file
+    vstk::ParameterAutomation automation;
+    if (!automation_file.empty()) {
+      log.inf("loading automation", redlog::field("file", automation_file));
+      
+      std::ifstream file(automation_file);
+      if (!file) {
+        log.error("failed to open automation file", redlog::field("file", automation_file));
+        return;
+      }
+      
+      std::string json_content((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+      
+      try {
+        automation = vstk::Automation::parse_automation_definition(
+            json_content, sample_rate, total_frames);
+        log.inf("automation loaded", redlog::field("parameter_count", automation.size()));
+      } catch (const std::exception& e) {
+        log.error("failed to parse automation file", redlog::field("error", e.what()));
+        return;
+      }
+    }
+
+    // setup output writer
+    log.inf("creating output writer",
+            redlog::field("file", output_file),
+            redlog::field("sample_rate", sample_rate),
+            redlog::field("bit_depth", bit_depth));
+            
+    int output_channels = vstk::constants::DEFAULT_OUTPUT_CHANNELS;
+    // todo: get actual output channel count from plugin configuration
+    
+    vstk::AudioFileWriter output_writer;
+    if (!output_writer.open(output_file, sample_rate, output_channels, bit_depth)) {
+      log.error("failed to create output file", redlog::field("file", output_file));
+      return;
+    }
+
+    // setup vst3 processing
+    log.inf("preparing vst3 processing");
+    
+    // query plugin bus configuration
+    int input_buses = plugin.bus_count(vstk::MediaType::Audio, vstk::BusDirection::Input);
+    int output_buses = plugin.bus_count(vstk::MediaType::Audio, vstk::BusDirection::Output);
+    
+    log.inf("plugin bus configuration",
+            redlog::field("input_buses", input_buses),
+            redlog::field("output_buses", output_buses));
+    
+    // audio buses are activated automatically during plugin loading
+    bool has_input_audio = audio_reader.is_valid();
+    
+    // prepare plugin for processing
+    auto prepare_result = plugin.prepare_processing();
+    if (!prepare_result) {
+      log.error("failed to prepare processing", redlog::field("error", prepare_result.error()));
+      return;
+    }
+    
+    // start processing
+    log.inf("about to start processing", redlog::field("is_processing_before", plugin.is_processing()));
+    auto start_result = plugin.start_processing();
+    if (!start_result) {
+      log.error("failed to start processing", redlog::field("error", start_result.error()));
+      return;
+    }
+    
+    log.inf("vst3 processing started successfully",
+            redlog::field("is_processing_after", plugin.is_processing()));
+    
+    // additional debug - check processing state right before main loop
+    log.inf("final processing state check",
+            redlog::field("is_loaded", plugin.is_loaded()),
+            redlog::field("is_processing", plugin.is_processing()));
+
+    // processing loop
+    log.inf("starting audio processing",
+            redlog::field("block_size", block_size),
+            redlog::field("total_frames", total_frames));
+
+    std::vector<float> input_buffer(block_size * (audio_reader.is_valid() ? audio_reader.total_channels() : 2));
+    std::vector<float> output_buffer(block_size * output_channels);
+    
+    size_t frames_processed = 0;
+    auto start_time = std::chrono::steady_clock::now();
+    
+    while (frames_processed < total_frames) {
+      size_t frames_to_process = std::min(static_cast<size_t>(block_size), 
+                                          total_frames - frames_processed);
+      
+      // clear buffers
+      vstk::util::clear_audio_buffer(input_buffer.data(), input_buffer.size());
+      vstk::util::clear_audio_buffer(output_buffer.data(), output_buffer.size());
+      
+      // read input audio if available
+      if (audio_reader.is_valid()) {
+        size_t frames_read = audio_reader.read_interleaved(input_buffer.data(), frames_to_process);
+        if (frames_read < frames_to_process) {
+          log.trc("reached end of input audio", redlog::field("frames_read", frames_read));
+        }
+      }
+      
+      // update process context for this block (VST3 SDK pattern)
+      auto* process_context = plugin.get_process_context();
+      if (process_context) {
+        vstk::util::update_process_context(*process_context, static_cast<int32_t>(frames_to_process));
+      }
+
+      // apply automation for current position
+      apply_parameter_automation(plugin, automation, frames_processed, log);
+      
+      // add basic MIDI events for instruments (when no audio input)
+      if (!has_input_audio && frames_processed == 0) {
+        add_instrument_midi_event(plugin, sample_rate, log);
+      }
+      
+      // process audio through plugin (real VST3 processing)
+      if (plugin.is_loaded()) {
+        // prepare input audio for plugin (convert interleaved to planar)
+        if (has_input_audio && audio_reader.is_valid()) {
+          prepare_plugin_input_audio(plugin, audio_reader, input_buffer.data(), 
+                                   frames_to_process, output_channels);
+        }
+        
+        // call vst3 processing
+        auto process_result = plugin.process(static_cast<int32_t>(frames_to_process));
+        if (!process_result) {
+          log.warn("vst3 processing failed", 
+                   redlog::field("error", process_result.error()),
+                   redlog::field("frame", frames_processed));
+          // continue processing even if one block fails
+        }
+        
+        // get processed output (convert planar to interleaved)
+        collect_plugin_output_audio(plugin, output_buffer.data(), frames_to_process, 
+                                   output_channels, log);
+      } else {
+        // plugin not ready - log once per session
+        static bool logged_not_ready = false;
+        if (!logged_not_ready) {
+          log.warn("plugin not ready for processing", 
+                   redlog::field("is_loaded", plugin.is_loaded()),
+                   redlog::field("is_processing", plugin.is_processing()));
+          logged_not_ready = true;
+        }
+        
+        // fallback: copy input to output or generate silence
+        if (has_input_audio && audio_reader.is_valid()) {
+          int channels_to_copy = std::min(audio_reader.total_channels(), output_channels);
+          std::copy(input_buffer.begin(), 
+                    input_buffer.begin() + frames_to_process * channels_to_copy,
+                    output_buffer.begin());
+        }
+        // if no input and plugin not ready, output buffer stays silent (already cleared)
+      }
+      
+      // write output
+      size_t frames_written = output_writer.write(output_buffer.data(), frames_to_process);
+      if (frames_written != frames_to_process) {
+        log.error("failed to write complete block", 
+                  redlog::field("expected", frames_to_process),
+                  redlog::field("written", frames_written));
+        break;
+      }
+      
+      frames_processed += frames_to_process;
+      
+      // progress logging
+      if (frames_processed % static_cast<size_t>(sample_rate * vstk::constants::PROGRESS_LOG_INTERVAL_SECONDS) == 0) {
+        double progress = static_cast<double>(frames_processed) / static_cast<double>(total_frames) * 100.0;
+        log.inf("processing progress", redlog::field("percent", progress));
+      }
+    }
+    
+    // cleanup vst3 processing
+    log.inf("stopping vst3 processing");
+    plugin.stop_processing();
+    
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    
+    log.inf("processing completed",
+            redlog::field("frames_processed", frames_processed),
+            redlog::field("duration_ms", duration.count()),
+            redlog::field("realtime_factor", (frames_processed / sample_rate) / (duration.count() / 1000.0)));
+            
+  } catch (const std::exception& e) {
+    log.error("processing failed", redlog::field("error", e.what()));
   }
-
-  log.inf("plugin loaded for audio processing",
-          redlog::field("name", plugin.name()));
-  log.warn(
-      "audio file processing not yet implemented - placeholder functionality");
-  log.inf("would process:", redlog::field("input_file", input_file),
-          redlog::field("output_file", output_file),
-          redlog::field("plugin_name", plugin.name()));
 }
 
 void cmd_inspect(args::Subparser& parser) {
@@ -146,23 +535,137 @@ void cmd_gui(args::Subparser& parser) {
 void cmd_process(args::Subparser& parser) {
   apply_verbosity();
 
-  args::ValueFlag<std::string> input_file(parser, "input", "input audio file",
-                                          {'i', "input"});
+  // input/output options
+  args::ValueFlagList<std::string> input_files(parser, "input", "input audio files (can specify multiple for multi-bus)",
+                                               {'i', "input"});
   args::ValueFlag<std::string> output_file(
       parser, "output", "output audio file", {'o', "output"});
+  args::Flag overwrite(
+      parser, "overwrite", "overwrite existing output file", {'y', "overwrite"});
+  
+  // processing options
+  args::ValueFlag<double> sample_rate(
+      parser, "sample-rate", "output sample rate (default: input rate or 44100)", {'r', "sample-rate"});
+  args::ValueFlag<int> block_size(
+      parser, "block-size", "processing block size (default: 512)", {'b', "block-size"});
+  args::ValueFlag<int> bit_depth(
+      parser, "bit-depth", "output bit depth: 16, 24, 32 (default: 32)", {'d', "bit-depth"});
+  args::ValueFlag<double> duration(
+      parser, "duration", "duration in seconds for instrument mode (default: 10)", {'t', "duration"});
+  
+  // plugin control options
+  args::ValueFlagList<std::string> parameters(
+      parser, "param", "parameter settings as name:value", {'p', "param"});
+  args::ValueFlag<std::string> automation_file(
+      parser, "automation", "json automation file", {'a', "automation"});
+  args::ValueFlag<std::string> preset_file(
+      parser, "preset", "load plugin preset file", {"preset"});
+  
+  // advanced options
+  args::Flag dry_run(
+      parser, "dry-run", "validate setup without processing", {'n', "dry-run"});
+  args::Flag quiet(
+      parser, "quiet", "minimal output (errors only)", {'q', "quiet"});
+  args::Flag progress(
+      parser, "progress", "show detailed progress information", {"progress"});
+  args::ValueFlag<int> threads(
+      parser, "threads", "number of processing threads (experimental)", {'j', "threads"});
+  
+  // plugin path (required)
   args::Positional<std::string> plugin_path(
       parser, "plugin_path", "path to vst3 plugin to use for processing");
+  
   parser.Parse();
 
-  if (!plugin_path || !input_file || !output_file) {
-    log_main.error("plugin path, input file, and output file required for "
-                   "process command");
+  // validate required arguments
+  if (!plugin_path || !output_file) {
+    log_main.error("plugin path and output file required for process command");
     std::cerr << parser;
     return;
   }
+  
+  // validate bit depth
+  if (bit_depth && (args::get(bit_depth) != 16 && args::get(bit_depth) != 24 && args::get(bit_depth) != 32)) {
+    log_main.error("bit depth must be 16, 24, or 32");
+    return;
+  }
+  
+  // validate block size
+  if (block_size && (args::get(block_size) < 32 || args::get(block_size) > 8192)) {
+    log_main.error("block size must be between 32 and 8192");
+    return;
+  }
+  
+  // validate duration
+  if (duration && args::get(duration) <= 0.0) {
+    log_main.error("duration must be positive");
+    return;
+  }
+  
+  // configure logging based on quiet/progress flags
+  if (quiet && progress) {
+    log_main.error("cannot use both --quiet and --progress");
+    return;
+  }
+  
+  if (quiet) {
+    redlog::set_level(redlog::level::error);
+  } else if (progress) {
+    redlog::set_level(redlog::level::trace);
+  }
 
-  process_audio_file(args::get(input_file), args::get(output_file),
-                     args::get(plugin_path));
+  // prepare arguments
+  std::vector<std::string> inputs;
+  if (input_files) {
+    inputs = args::get(input_files);
+  }
+
+  std::vector<std::string> params;
+  if (parameters) {
+    params = args::get(parameters);
+  }
+
+  std::string automation_path;
+  if (automation_file) {
+    automation_path = args::get(automation_file);
+  }
+  
+  // dry run mode - validate setup only
+  if (dry_run) {
+    log_main.inf("dry run mode - validating setup");
+    
+    // validate plugin exists
+    if (!std::filesystem::exists(args::get(plugin_path))) {
+      log_main.error("plugin file does not exist", redlog::field("path", args::get(plugin_path)));
+      return;
+    }
+    
+    // validate input files exist
+    for (const auto& input : inputs) {
+      if (!std::filesystem::exists(input)) {
+        log_main.error("input file does not exist", redlog::field("path", input));
+        return;
+      }
+    }
+    
+    // validate automation file exists
+    if (!automation_path.empty() && !std::filesystem::exists(automation_path)) {
+      log_main.error("automation file does not exist", redlog::field("path", automation_path));
+      return;
+    }
+    
+    log_main.inf("dry run validation passed - setup is valid");
+    return;
+  }
+
+  // call process function with enhanced parameters
+  process_audio_file(inputs, args::get(output_file), args::get(plugin_path),
+                     automation_path, params,
+                     sample_rate ? args::get(sample_rate) : 0.0,
+                     block_size ? args::get(block_size) : vstk::constants::DEFAULT_BLOCK_SIZE,
+                     bit_depth ? args::get(bit_depth) : vstk::constants::DEFAULT_BIT_DEPTH,
+                     overwrite,
+                     duration ? args::get(duration) : 0.0);
 }
 
 void cmd_scan(args::Subparser& parser) {

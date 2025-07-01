@@ -43,6 +43,8 @@ set(vstshill_sources
     src/util/vst_discovery.cpp
     src/automation/automation.cpp
     src/util/string_utils.cpp
+    src/util/audio_utils.cpp
+    src/util/midi_utils.cpp
     src/audio/audio_io.cpp
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )

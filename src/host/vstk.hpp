@@ -195,6 +195,7 @@ public:
 
   // audio processing
   Result<bool> prepare_processing();
+  Result<bool> refresh_audio_buffers();
   Result<bool> start_processing();
   void stop_processing();
   bool is_processing() const { return _is_processing; }
@@ -228,6 +229,7 @@ public:
 private:
   void reset_state();
   Result<bool> setup_buses();
+  Result<bool> activate_default_buses();
   Result<bool> configure_processing();
 
   redlog::logger _log;
@@ -341,6 +343,8 @@ void setup_process_context(ProcessContext& context, double sample_rate,
                            int64_t sample_position = 0, double tempo = 120.0,
                            int32_t time_sig_numerator = 4,
                            int32_t time_sig_denominator = 4);
+
+void update_process_context(ProcessContext& context, int32_t block_size);
 
 // plugin info scanning
 Result<PluginInfo> scan_plugin(const std::string& plugin_path);
