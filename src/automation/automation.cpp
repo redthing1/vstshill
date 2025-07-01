@@ -15,7 +15,7 @@ Automation::parse_automation_definition(const std::string& json_str,
   // parse json into a map of parameter names to automation definitions
   auto def = json.get<std::map<std::string, nlohmann::json>>();
 
-  // convert automation definition into ParameterAutomation instance
+  // convert automation definition into parameter automation instance
   // by converting keyframe times from string format to samples,
   // and text values into normalized float values
   ParameterAutomation automation;

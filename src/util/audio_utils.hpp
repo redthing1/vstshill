@@ -11,7 +11,7 @@ void deinterleave_audio(const float* interleaved, float** planar_channels,
 
 // convert planar audio data to interleaved format
 // interleaved buffer should be pre-allocated with size num_channels * num_frames
-void interleave_audio(float** planar_channels, float* interleaved,
+void interleave_audio(const float* const* planar_channels, float* interleaved,
                      int num_channels, int num_frames);
 
 // clear audio buffer efficiently

@@ -26,4 +26,15 @@ constexpr size_t PROGRESS_LOG_INTERVAL_SECONDS = 5;
 constexpr int MAX_AUDIO_CHANNELS = 8;
 constexpr size_t MAX_BLOCK_SIZE = 8192;
 
+// gui event loop timing
+constexpr int GUI_REFRESH_INTERVAL_MS = 16;
+
+// audio format constants
+constexpr int STEREO_CHANNELS = 2;
+
+// verbosity level constants
+constexpr int VERBOSITY_LEVEL_VERBOSE = 1;
+constexpr int VERBOSITY_LEVEL_TRACE = 2; 
+constexpr int VERBOSITY_LEVEL_DEBUG = 3;
+
 } // namespace vstk::constants

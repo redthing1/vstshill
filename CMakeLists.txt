@@ -46,6 +46,13 @@ set(vstshill_sources
     src/util/audio_utils.cpp
     src/util/midi_utils.cpp
     src/audio/audio_io.cpp
+    src/audio/sdl_audio.cpp
+    src/commands/command.cpp
+    src/commands/scan_command.cpp
+    src/commands/inspect_command.cpp
+    src/commands/parameters_command.cpp
+    src/commands/gui_command.cpp
+    src/commands/process_command.cpp
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )
 
@@ -109,3 +116,19 @@ set_target_properties(vstshill PROPERTIES
     OUTPUT_NAME "vstshill"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# clang-format targets
+find_program(CLANG_FORMAT "clang-format")
+if(CLANG_FORMAT)
+    add_custom_target(format
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format.cmake
+        COMMENT "Formatting source code with clang-format"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    
+    add_custom_target(format-check
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.cmake
+        COMMENT "Checking code formatting with clang-format"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endif()
