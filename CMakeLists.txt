@@ -31,10 +31,13 @@ add_subdirectory(lib/vst3sdk)
 add_subdirectory(lib/redlog_cpp)
 
 # Find SDL2 cross-platform
-find_package(SDL2 REQUIRED)
+find_package(SDL2 CONFIG QUIET)
 if(NOT SDL2_FOUND)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SDL2 REQUIRED sdl2)
+    find_package(SDL2 MODULE QUIET)
+    if(NOT SDL2_FOUND)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED sdl2)
+    endif()
 endif()
 
 # source files
