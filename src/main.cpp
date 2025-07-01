@@ -57,6 +57,7 @@ int main(int argc, char* argv[]) {
 
   try {
     parser.ParseCLI(argc, argv);
+    apply_verbosity();
   } catch (args::Help) {
     std::cout << parser;
   } catch (args::Error& e) {
