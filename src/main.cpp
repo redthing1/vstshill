@@ -11,12 +11,6 @@
 #include "host/vstk.hpp"
 #include "util/vst_discovery.hpp"
 
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
 namespace {
 auto log_main = redlog::get_logger("vstshill");
 }
