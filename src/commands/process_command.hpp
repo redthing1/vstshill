@@ -45,6 +45,9 @@ private:
 
   args::Positional<std::string> plugin_path_;
 
+  // resolved plugin path
+  std::string resolved_plugin_path_;
+
   // validation and setup
   bool validate_arguments();
   void configure_logging();

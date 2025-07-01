@@ -2,6 +2,7 @@
 #include "../audio/sdl_audio.hpp"
 #include "../host/constants.hpp"
 #include "../host/vstk.hpp"
+#include "../util/vst_discovery.hpp"
 #include <iostream>
 #include <redlog/redlog.hpp>
 
@@ -18,7 +19,7 @@ namespace vstk {
 
 GuiCommand::GuiCommand(args::Subparser& parser)
     : parser_(parser),
-      plugin_path_(parser, "plugin_path", "path to vst3 plugin to open in gui"),
+      plugin_path_(parser, "plugin_path", "path or name of vst3 plugin to open in gui"),
       audio_output_(parser, "audio",
                     "enable real-time audio output (experimental)", {"audio"}) {
 }
@@ -29,12 +30,17 @@ int GuiCommand::execute() {
   parser_.Parse();
 
   if (!plugin_path_) {
-    log_main.error("plugin path required for gui command");
+    log_main.err("plugin path or name required for gui command");
     std::cerr << parser_;
     return 1;
   }
 
-  open_plugin_gui(args::get(plugin_path_), audio_output_);
+  auto resolved_path = vstk::util::resolve_plugin_path(args::get(plugin_path_));
+  if (resolved_path.empty()) {
+    return 1;
+  }
+
+  open_plugin_gui(resolved_path, audio_output_);
   return 0;
 }
 

@@ -1,6 +1,7 @@
 #include "parameters_command.hpp"
 #include "../host/parameter.hpp"
 #include "../host/vstk.hpp"
+#include "../util/vst_discovery.hpp"
 #include <iostream>
 #include <redlog/redlog.hpp>
 
@@ -12,7 +13,7 @@ namespace vstk {
 ParametersCommand::ParametersCommand(args::Subparser& parser)
     : parser_(parser),
       plugin_path_(parser, "plugin_path",
-                   "path to vst3 plugin to analyze parameters") {}
+                   "path or name of vst3 plugin to analyze parameters") {}
 
 int ParametersCommand::execute() {
   apply_verbosity();
@@ -20,8 +21,13 @@ int ParametersCommand::execute() {
   parser_.Parse();
 
   if (!plugin_path_) {
-    log_main.error("plugin path required for parameters command");
+    log_main.err("plugin path or name required for parameters command");
     std::cerr << parser_;
+    return 1;
+  }
+
+  auto resolved_path = vstk::util::resolve_plugin_path(args::get(plugin_path_));
+  if (resolved_path.empty()) {
     return 1;
   }
 
@@ -30,7 +36,7 @@ int ParametersCommand::execute() {
     vstk::Plugin plugin(log_main);
 
     // load the plugin
-    auto result = plugin.load(args::get(plugin_path_));
+    auto result = plugin.load(resolved_path);
     if (!result) {
       log_main.error("failed to load plugin",
                      redlog::field("error", result.error()));

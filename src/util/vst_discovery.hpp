@@ -38,5 +38,8 @@ std::vector<PluginInfo> scan_directory(const std::filesystem::path& directory,
                                        bool recursive = true);
 bool is_directory_accessible(const std::filesystem::path& path);
 
+// plugin resolution utilities
+std::string resolve_plugin_path(const std::string& input);
+
 } // namespace util
 } // namespace vstk

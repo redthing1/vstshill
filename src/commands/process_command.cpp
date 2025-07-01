@@ -4,6 +4,7 @@
 #include "../util/audio_utils.hpp"
 #include "../util/midi_utils.hpp"
 #include "../util/string_utils.hpp"
+#include "../util/vst_discovery.hpp"
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -218,13 +219,19 @@ ProcessCommand::ProcessCommand(args::Subparser& parser)
       threads_(parser, "threads", "number of processing threads (experimental)",
                {'j', "threads"}),
       plugin_path_(parser, "plugin_path",
-                   "path to vst3 plugin to use for processing") {}
+                   "path or name of vst3 plugin to use for processing") {}
 
 int ProcessCommand::execute() {
   apply_verbosity();
   parser_.Parse();
 
   if (!validate_arguments()) {
+    return 1;
+  }
+
+  // resolve plugin path (supports both paths and names)
+  resolved_plugin_path_ = vstk::util::resolve_plugin_path(args::get(plugin_path_));
+  if (resolved_plugin_path_.empty()) {
     return 1;
   }
 
@@ -269,7 +276,7 @@ int ProcessCommand::execute() {
 bool ProcessCommand::validate_arguments() {
   // validate required arguments
   if (!plugin_path_ || !output_file_) {
-    log_main.error("plugin path and output file required for process command");
+    log_main.err("plugin path or name and output file required for process command");
     std::cerr << parser_;
     return false;
   }
@@ -325,12 +332,7 @@ int ProcessCommand::perform_dry_run_validation() {
     automation_path = args::get(automation_file_);
   }
 
-  // validate plugin exists
-  if (!std::filesystem::exists(args::get(plugin_path_))) {
-    log_main.error("plugin file does not exist",
-                   redlog::field("path", args::get(plugin_path_)));
-    return 1;
-  }
+  // plugin existence is validated by resolve_plugin_path()
 
   // validate input files exist
   for (const auto& input : inputs) {
@@ -378,14 +380,14 @@ int ProcessCommand::setup_audio_input_and_plugin(
   }
 
   // load plugin
-  log.inf("loading plugin", redlog::field("path", args::get(plugin_path_)));
+  log.inf("loading plugin", redlog::field("path", resolved_plugin_path_));
   vstk::PluginConfig config;
   config.with_process_mode(vstk::ProcessMode::Offline)
       .with_sample_rate(sample_rate)
       .with_block_size(block_size_ ? args::get(block_size_)
                                    : vstk::constants::DEFAULT_BLOCK_SIZE);
 
-  auto load_result = plugin.load(args::get(plugin_path_), config);
+  auto load_result = plugin.load(resolved_plugin_path_, config);
   if (!load_result) {
     log.error("failed to load plugin",
               redlog::field("error", load_result.error()));
