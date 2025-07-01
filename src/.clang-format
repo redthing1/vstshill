@@ -3,4 +3,6 @@ TabWidth: '2'
 UseTab: Never
 InsertBraces: true
 PointerAlignment: Left
+IncludeBlocks: Preserve
+SortIncludes: Never
 ...

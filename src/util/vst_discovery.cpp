@@ -3,9 +3,9 @@
 #include <cstdlib>
 
 #ifdef _WIN32
-#include <knownfolders.h>
-#include <shlobj.h>
 #include <windows.h>
+#include <shlobj.h>
+#include <knownfolders.h>
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #endif
