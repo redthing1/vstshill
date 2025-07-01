@@ -4,19 +4,37 @@
 #include <string>
 #include <vector>
 
+#include "ext/args.hpp"
 #include <redlog/redlog.hpp>
 
-#include "cli.hpp"
 #include "host/minimal.hpp"
 #include "host/vstk.hpp"
 #include "util/vst_discovery.hpp"
+
+args::Group arguments("arguments");
+args::HelpFlag help_flag(arguments, "help", "help", {'h', "help"});
+args::CounterFlag verbosity_flag(arguments, "verbosity", "verbosity level",
+                                 {'v'});
 
 namespace {
 auto log_main = redlog::get_logger("vstshill");
 }
 
+void apply_verbosity() {
+  // apply verbosity
+  int verbosity = args::get(verbosity_flag);
+  redlog::set_level(redlog::level::info);
+  if (verbosity == 1) {
+    redlog::set_level(redlog::level::verbose);
+  } else if (verbosity == 2) {
+    redlog::set_level(redlog::level::trace);
+  } else if (verbosity >= 3) {
+    redlog::set_level(redlog::level::debug);
+  }
+}
+
 void open_plugin_gui(const std::string& plugin_path) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   auto log = log_main.with_name("gui");
   log.inf("opening plugin editor", redlog::field("path", plugin_path));
@@ -62,7 +80,7 @@ void open_plugin_gui(const std::string& plugin_path) {
 void process_audio_file(const std::string& input_file,
                         const std::string& output_file,
                         const std::string& plugin_path) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   auto log = log_main.with_name("processor");
   log.inf("processing audio file", redlog::field("input", input_file),
@@ -92,7 +110,7 @@ void process_audio_file(const std::string& input_file,
 }
 
 void cmd_inspect(args::Subparser& parser) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   args::Positional<std::string> plugin_path(parser, "plugin_path",
                                             "path to vst3 plugin to inspect");
@@ -109,7 +127,7 @@ void cmd_inspect(args::Subparser& parser) {
 }
 
 void cmd_gui(args::Subparser& parser) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   args::Positional<std::string> plugin_path(
       parser, "plugin_path", "path to vst3 plugin to open in gui");
@@ -125,7 +143,7 @@ void cmd_gui(args::Subparser& parser) {
 }
 
 void cmd_process(args::Subparser& parser) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   args::ValueFlag<std::string> input_file(parser, "input", "input audio file",
                                           {'i', "input"});
@@ -147,7 +165,7 @@ void cmd_process(args::Subparser& parser) {
 }
 
 void cmd_scan(args::Subparser& parser) {
-  cli::apply_verbosity();
+  apply_verbosity();
 
   args::ValueFlagList<std::string> search_paths(
       parser, "paths", "additional search paths", {'p', "path"});
@@ -187,7 +205,7 @@ int main(int argc, char* argv[]) {
   parser.SetArgumentSeparations(false, false, true, true);
   parser.LongSeparator(" ");
 
-  args::GlobalOptions globals(parser, cli::arguments);
+  args::GlobalOptions globals(parser, arguments);
   args::Group commands(parser, "commands");
 
   args::Command inspect_cmd(commands, "inspect",

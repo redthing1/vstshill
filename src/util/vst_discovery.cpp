@@ -131,7 +131,8 @@ std::vector<PluginInfo> scan_directory(const std::filesystem::path& directory,
 
   try {
     if (recursive) {
-      for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+      for (const auto& entry :
+           std::filesystem::recursive_directory_iterator(directory)) {
         process_entry(entry);
       }
     } else {

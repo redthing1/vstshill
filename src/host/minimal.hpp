@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include <redlog/redlog.hpp>
+#include <string>
 
 namespace vstk {
 namespace host {
@@ -9,7 +9,8 @@ namespace host {
 // minimal vst3 host for cli inspection - no gui functionality
 class MinimalHost {
 public:
-  explicit MinimalHost(const redlog::logger& logger = redlog::get_logger("vstk::minimal"));
+  explicit MinimalHost(
+      const redlog::logger& logger = redlog::get_logger("vstk::minimal"));
   ~MinimalHost() = default;
 
   // non-copyable, non-movable

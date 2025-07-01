@@ -23,7 +23,9 @@ public:
   virtual ~MinimalHostApplication() = default;
 
   tresult PLUGIN_API getName(Vst::String128 name) override {
-    return Vst::StringConvert::convert("vstshill minimal host", name) ? kResultTrue : kInternalError;
+    return Vst::StringConvert::convert("vstshill minimal host", name)
+               ? kResultTrue
+               : kInternalError;
   }
 
   tresult PLUGIN_API createInstance(TUID cid, TUID _iid, void** obj) override {
@@ -49,7 +51,8 @@ public:
   DECLARE_FUNKNOWN_METHODS
 };
 
-IMPLEMENT_FUNKNOWN_METHODS(MinimalHostApplication, Vst::IHostApplication, Vst::IHostApplication::iid)
+IMPLEMENT_FUNKNOWN_METHODS(MinimalHostApplication, Vst::IHostApplication,
+                           Vst::IHostApplication::iid)
 
 // global host context for minimal host
 FUnknown* get_minimal_host_context() {
@@ -82,7 +85,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
   auto factory = module->getFactory();
   auto factory_info = factory.info();
 
-  _log.trc("factory information", 
+  _log.trc("factory information",
            redlog::field("vendor", factory_info.vendor()),
            redlog::field("url", factory_info.url()),
            redlog::field("email", factory_info.email()),
@@ -118,7 +121,8 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
       // initialize component
       tresult result = component->initialize(get_minimal_host_context());
       if (result != kResultOk) {
-        _log.error("failed to initialize component", redlog::field("result", result));
+        _log.error("failed to initialize component",
+                   redlog::field("result", result));
         continue;
       }
 
@@ -126,9 +130,11 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
 
       // get bus information
       int32 num_audio_inputs = component->getBusCount(Vst::kAudio, Vst::kInput);
-      int32 num_audio_outputs = component->getBusCount(Vst::kAudio, Vst::kOutput);
+      int32 num_audio_outputs =
+          component->getBusCount(Vst::kAudio, Vst::kOutput);
       int32 num_event_inputs = component->getBusCount(Vst::kEvent, Vst::kInput);
-      int32 num_event_outputs = component->getBusCount(Vst::kEvent, Vst::kOutput);
+      int32 num_event_outputs =
+          component->getBusCount(Vst::kEvent, Vst::kOutput);
 
       _log.trc("component bus configuration",
                redlog::field("audio_inputs", num_audio_inputs),
@@ -139,10 +145,10 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
       // get bus details
       for (int32 i = 0; i < num_audio_inputs; ++i) {
         Vst::BusInfo bus_info;
-        if (component->getBusInfo(Vst::kAudio, Vst::kInput, i, bus_info) == kResultOk) {
+        if (component->getBusInfo(Vst::kAudio, Vst::kInput, i, bus_info) ==
+            kResultOk) {
           std::string bus_name = Vst::StringConvert::convert(bus_info.name);
-          _log.dbg("input bus details", 
-                   redlog::field("bus_index", i),
+          _log.dbg("input bus details", redlog::field("bus_index", i),
                    redlog::field("bus_name", bus_name),
                    redlog::field("channel_count", bus_info.channelCount));
         }
@@ -150,10 +156,10 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
 
       for (int32 i = 0; i < num_audio_outputs; ++i) {
         Vst::BusInfo bus_info;
-        if (component->getBusInfo(Vst::kAudio, Vst::kOutput, i, bus_info) == kResultOk) {
+        if (component->getBusInfo(Vst::kAudio, Vst::kOutput, i, bus_info) ==
+            kResultOk) {
           std::string bus_name = Vst::StringConvert::convert(bus_info.name);
-          _log.dbg("output bus details", 
-                   redlog::field("bus_index", i),
+          _log.dbg("output bus details", redlog::field("bus_index", i),
                    redlog::field("bus_name", bus_name),
                    redlog::field("channel_count", bus_info.channelCount));
         }
@@ -164,7 +170,8 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
       if (component->getControllerClassId(controller_cid) == kResultOk) {
         _log.dbg("creating edit controller");
 
-        auto controller = factory.createInstance<Vst::IEditController>(controller_cid);
+        auto controller =
+            factory.createInstance<Vst::IEditController>(controller_cid);
         if (controller) {
           _log.dbg("edit controller created successfully");
 
@@ -173,22 +180,24 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
 
             // get parameter count
             int32 param_count = controller->getParameterCount();
-            _log.trc("controller parameters", redlog::field("parameter_count", param_count));
+            _log.trc("controller parameters",
+                     redlog::field("parameter_count", param_count));
 
             if (param_count > 0) {
               _log.trc("enumerating parameters (first 10)");
               for (int32 p = 0; p < std::min(param_count, 10); ++p) {
                 Vst::ParameterInfo param_info;
                 if (controller->getParameterInfo(p, param_info) == kResultOk) {
-                  std::string param_title = Vst::StringConvert::convert(param_info.title);
-                  _log.trc("parameter details", 
-                           redlog::field("index", p),
+                  std::string param_title =
+                      Vst::StringConvert::convert(param_info.title);
+                  _log.trc("parameter details", redlog::field("index", p),
                            redlog::field("title", param_title),
                            redlog::field("id", param_info.id));
                 }
               }
               if (param_count > 10) {
-                _log.trc("additional parameters available", redlog::field("remaining", param_count - 10));
+                _log.trc("additional parameters available",
+                         redlog::field("remaining", param_count - 10));
               }
             }
 
@@ -219,8 +228,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
 
     _log.trc("available classes in module");
     for (auto& class_info : factory.classInfos()) {
-      _log.trc("found class", 
-               redlog::field("name", class_info.name()),
+      _log.trc("found class", redlog::field("name", class_info.name()),
                redlog::field("category", class_info.category()));
     }
   }
