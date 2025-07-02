@@ -3,7 +3,7 @@
 #include "../host/constants.hpp"
 #include "../host/vstk.hpp"
 #include "../util/vst_discovery.hpp"
-#include <iostream>
+#include "../util/string_utils.hpp"
 #include <redlog/redlog.hpp>
 
 #ifdef _WIN32
@@ -22,8 +22,9 @@ GuiCommand::GuiCommand(args::Subparser& parser)
       plugin_path_(parser, "plugin_path",
                    "path or name of vst3 plugin to open in gui"),
       audio_output_(parser, "audio",
-                    "enable real-time audio output (experimental)", {"audio"}) {
-}
+                    "enable real-time audio output (experimental)", {"audio"}),
+      pause_flag_(parser, "pause", "pause after plugin load for debugging",
+                  {"pause"}) {}
 
 int GuiCommand::execute() {
   apply_verbosity();
@@ -41,12 +42,12 @@ int GuiCommand::execute() {
     return 1;
   }
 
-  open_plugin_gui(resolved_path, audio_output_);
+  open_plugin_gui(resolved_path, audio_output_, pause_flag_);
   return 0;
 }
 
 void GuiCommand::open_plugin_gui(const std::string& plugin_path,
-                                 bool with_audio) const {
+                                 bool with_audio, bool pause_after_load) const {
   auto log = log_main.with_name("gui");
   log.inf("opening plugin editor", redlog::field("path", plugin_path));
 
@@ -80,6 +81,13 @@ void GuiCommand::open_plugin_gui(const std::string& plugin_path,
   }
 
   log.inf("plugin loaded successfully", redlog::field("name", plugin.name()));
+
+  // pause for debugging if requested
+  if (pause_after_load) {
+    log.inf("pausing after plugin load (before gui creation)");
+    wait_for_input("plugin loaded into memory. press enter to continue with "
+                   "gui creation...");
+  }
 
   if (!plugin.has_editor()) {
     log.warn("plugin does not have an editor interface (headless plugin)");

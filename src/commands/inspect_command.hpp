@@ -19,6 +19,7 @@ public:
 private:
   args::Subparser& parser_;
   args::Positional<std::string> plugin_path_;
+  args::Flag pause_flag_;
 };
 
 } // namespace vstk

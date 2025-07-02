@@ -20,4 +20,7 @@ std::string trim(const std::string& str);
 // check if string ends with character
 bool ends_with_char(const std::string& str, char ch);
 
+// wait for user input (debugging utility)
+void wait_for_input(const std::string& message = "press enter to continue...");
+
 } // namespace vstk

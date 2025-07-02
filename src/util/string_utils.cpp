@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iostream>
+#include <limits>
 
 namespace vstk {
 
@@ -39,6 +41,11 @@ std::string trim(const std::string& str) {
 
 bool ends_with_char(const std::string& str, char ch) {
   return !str.empty() && str.back() == ch;
+}
+
+void wait_for_input(const std::string& message) {
+  std::cout << message << std::flush;
+  std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
 } // namespace vstk

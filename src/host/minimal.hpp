@@ -20,7 +20,8 @@ public:
   MinimalHost& operator=(MinimalHost&&) = delete;
 
   // loads and inspects a vst3 plugin, displaying detailed information
-  void inspect_plugin(const std::string& plugin_path);
+  void inspect_plugin(const std::string& plugin_path,
+                      bool pause_after_load = false);
 
 private:
   redlog::logger _log;

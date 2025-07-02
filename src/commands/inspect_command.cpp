@@ -11,7 +11,9 @@ namespace vstk {
 
 InspectCommand::InspectCommand(args::Subparser& parser)
     : parser_(parser), plugin_path_(parser, "plugin_path",
-                                    "path or name of vst3 plugin to inspect") {}
+                                    "path or name of vst3 plugin to inspect"),
+      pause_flag_(parser, "pause", "pause after plugin load for debugging",
+                  {"pause"}) {}
 
 int InspectCommand::execute() {
   apply_verbosity();
@@ -30,7 +32,7 @@ int InspectCommand::execute() {
   }
 
   vstk::host::MinimalHost host(log_main);
-  host.inspect_plugin(resolved_path);
+  host.inspect_plugin(resolved_path, pause_flag_);
 
   return 0;
 }

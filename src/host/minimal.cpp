@@ -1,4 +1,5 @@
 #include "minimal.hpp"
+#include "../util/string_utils.hpp"
 #include <algorithm>
 
 // vst3 sdk includes
@@ -66,7 +67,8 @@ MinimalHost::MinimalHost(const redlog::logger& logger) : _log(logger) {
   _log.trc("minimal host instance created");
 }
 
-void MinimalHost::inspect_plugin(const std::string& plugin_path) {
+void MinimalHost::inspect_plugin(const std::string& plugin_path,
+                                 bool pause_after_load) {
   _log.inf("loading vst3 plugin", redlog::field("path", plugin_path));
 
   std::string error_description;
@@ -80,6 +82,13 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path) {
   _log.dbg("module loaded successfully",
            redlog::field("module_path", module->getPath()),
            redlog::field("module_name", module->getName()));
+
+  // pause for debugging if requested
+  if (pause_after_load) {
+    _log.inf("pausing after plugin module load (before initialization)");
+    wait_for_input("plugin loaded into memory. press enter to continue with "
+                   "initialization...");
+  }
 
   // get plugin factory
   auto factory = module->getFactory();
