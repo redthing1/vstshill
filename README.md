@@ -8,7 +8,7 @@ an ultra-lightweight cross-platform vst3 host for analyzing plugins.
 ## features
 
 + load plugins
-+ gui host with sdl2
++ gui host with sdl3
 + offline processing of video files
 
 ## build
@@ -23,9 +23,9 @@ cmake --build build-macos --parallel
 
 ## windows
 
-use vcpkg to install sdl2:
+use vcpkg to install sdl3:
 ```sh
-.\vcpkg install sdl2:x64-windows
+.\vcpkg install sdl3:x64-windows
 ```
 
 using a developer command prompt:

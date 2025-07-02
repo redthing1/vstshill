@@ -1,14 +1,14 @@
 #pragma once
 
 #include "../host/vstk.hpp"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <atomic>
 #include <memory>
 #include <vector>
 
 namespace vstk {
 
-// SDL2-based real-time audio output engine
+// SDL3-based real-time audio output engine
 class SDLAudioEngine {
 public:
   SDLAudioEngine();
@@ -37,11 +37,12 @@ public:
   int channels() const { return channels_; }
 
 private:
-  // SDL audio callback (static function required by SDL)
-  static void audio_callback(void* userdata, Uint8* stream, int len);
+  // SDL3 audio stream callback (static function required by SDL)
+  static void audio_stream_callback(void* userdata, SDL_AudioStream* stream,
+                                    int additional_amount, int total_amount);
 
-  // instance audio callback implementation
-  void process_audio_block(float* output, int frames);
+  // instance audio generation implementation
+  void generate_audio_chunk(float* output, int frames);
 
   // initialize SDL audio device
   bool open_audio_device();
@@ -52,8 +53,8 @@ private:
   int buffer_size_;
   int channels_;
 
-  // SDL audio device
-  SDL_AudioDeviceID device_id_;
+  // SDL audio stream (SDL3)
+  SDL_AudioStream* audio_stream_;
   SDL_AudioSpec audio_spec_;
 
   // plugin connection

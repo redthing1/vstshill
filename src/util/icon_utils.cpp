@@ -31,8 +31,8 @@ bool load_icon_from_data(SDL_Window* window, const unsigned char* data,
     return false;
   }
 
-  // create sdl rwops from memory
-  SDL_RWops* rw = SDL_RWFromConstMem(data, static_cast<int>(size));
+  // create sdl iostream from memory
+  SDL_IOStream* rw = SDL_IOFromConstMem(data, static_cast<size_t>(size));
   if (!rw) {
     log.warn("failed to create sdl rwops from icon data",
              redlog::field("error", SDL_GetError()));
@@ -43,18 +43,18 @@ bool load_icon_from_data(SDL_Window* window, const unsigned char* data,
   SDL_Surface* icon_surface = nullptr;
 
 #ifdef HAVE_SDL_IMAGE
-  icon_surface =
-      IMG_Load_RW(rw, 0); // don't free rwops yet in case we need fallback
+  icon_surface = IMG_Load_IO(
+      rw, false); // don't close iostream yet in case we need fallback
   if (icon_surface) {
-    SDL_FreeRW(rw); // free rwops after successful load
+    SDL_CloseIO(rw); // close iostream after successful load
     log.trc("loaded icon using sdl_image");
   }
 #endif
 
   // fallback to sdl_loadbmp_rw if sdl_image failed or isn't available
   if (!icon_surface) {
-    SDL_RWseek(rw, 0, RW_SEEK_SET);       // reset to beginning
-    icon_surface = SDL_LoadBMP_RW(rw, 1); // 1 = free rwops after use
+    SDL_SeekIO(rw, 0, SDL_IO_SEEK_SET);      // reset to beginning
+    icon_surface = SDL_LoadBMP_IO(rw, true); // true = close iostream after use
     if (icon_surface) {
       log.trc("loaded icon using sdl bmp loader (fallback)");
     }
@@ -72,10 +72,10 @@ bool load_icon_from_data(SDL_Window* window, const unsigned char* data,
   log.trc("icon loaded and set successfully", redlog::field("size", size),
           redlog::field("width", icon_surface->w),
           redlog::field("height", icon_surface->h),
-          redlog::field("format", icon_surface->format->format));
+          redlog::field("format", icon_surface->format));
 
   // clean up
-  SDL_FreeSurface(icon_surface);
+  SDL_DestroySurface(icon_surface);
 
   return true;
 }

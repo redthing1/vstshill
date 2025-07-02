@@ -14,16 +14,13 @@ void* GuiPlatform::extract_native_view(SDL_Window* window) {
     return nullptr;
   }
 
-  // get sdl window system info
-  SDL_SysWMinfo wm_info;
-  SDL_VERSION(&wm_info.version);
+  // get x11 window using SDL3 properties
+  Window x11_window = (Window)(uintptr_t)SDL_GetNumberProperty(
+      SDL_GetWindowProperties(window), SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
 
-  if (!SDL_GetWindowWMInfo(window, &wm_info)) {
+  if (!x11_window) {
     return nullptr;
   }
-
-  // on linux, we use the x11 window id
-  Window x11_window = wm_info.info.x11.window;
   return (void*)(uintptr_t)x11_window;
 }
 

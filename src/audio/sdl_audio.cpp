@@ -23,8 +23,9 @@ struct AudioProcessingContext {
 };
 
 SDLAudioEngine::SDLAudioEngine()
-    : sample_rate_(44100), buffer_size_(512), channels_(2), device_id_(0),
-      plugin_(nullptr), is_playing_(false), is_initialized_(false),
+    : sample_rate_(44100), buffer_size_(512), channels_(2),
+      audio_stream_(nullptr), plugin_(nullptr), is_playing_(false),
+      is_initialized_(false),
       context_(std::make_unique<AudioProcessingContext>()) {}
 
 SDLAudioEngine::~SDLAudioEngine() {
@@ -94,7 +95,7 @@ bool SDLAudioEngine::connect_plugin(Plugin& plugin) {
   }
 
   int input_buses = plugin.bus_count(MediaType::Audio, BusDirection::Input);
-  
+
   log_audio.inf("plugin connected successfully",
                 redlog::field("input_buses", input_buses),
                 redlog::field("is_instrument", input_buses == 0));
@@ -130,8 +131,12 @@ bool SDLAudioEngine::start() {
 
   context_->processing_enabled.store(true);
 
-  // start SDL audio playback
-  SDL_PauseAudioDevice(device_id_, 0);
+  // start SDL audio stream playback
+  if (!SDL_ResumeAudioStreamDevice(audio_stream_)) {
+    log_audio.error("failed to resume audio stream device",
+                    redlog::field("error", SDL_GetError()));
+    return false;
+  }
   is_playing_.store(true);
 
   log_audio.inf("real-time audio playback started");
@@ -145,9 +150,9 @@ void SDLAudioEngine::stop() {
 
   log_audio.inf("stopping real-time audio playback");
 
-  // stop SDL audio playback
-  if (device_id_ > 0) {
-    SDL_PauseAudioDevice(device_id_, 1);
+  // stop SDL audio stream playback
+  if (audio_stream_) {
+    SDL_PauseAudioStreamDevice(audio_stream_);
   }
 
   context_->processing_enabled.store(false);
@@ -169,12 +174,15 @@ std::vector<std::string> SDLAudioEngine::get_audio_devices() {
     return devices;
   }
 
-  int num_devices = SDL_GetNumAudioDevices(0); // 0 for playback devices
-  for (int i = 0; i < num_devices; ++i) {
-    const char* device_name = SDL_GetAudioDeviceName(i, 0);
-    if (device_name) {
-      devices.emplace_back(device_name);
+  SDL_AudioDeviceID* device_ids = SDL_GetAudioPlaybackDevices(nullptr);
+  if (device_ids) {
+    for (int i = 0; device_ids[i] != 0; ++i) {
+      const char* device_name = SDL_GetAudioDeviceName(device_ids[i]);
+      if (device_name) {
+        devices.emplace_back(device_name);
+      }
     }
+    SDL_free(device_ids);
   }
 
   return devices;
@@ -184,40 +192,46 @@ bool SDLAudioEngine::open_audio_device() {
   // configure SDL audio specification
   SDL_AudioSpec desired_spec = {};
   desired_spec.freq = sample_rate_;
-  desired_spec.format = AUDIO_F32SYS; // 32-bit float, system endian
+  desired_spec.format = SDL_AUDIO_F32; // 32-bit float, system endian
   desired_spec.channels = static_cast<Uint8>(channels_);
-  desired_spec.samples = static_cast<Uint16>(buffer_size_);
-  desired_spec.callback = audio_callback;
-  desired_spec.userdata = this;
+  // SDL3 removed samples, callback, and userdata from SDL_AudioSpec
+  // These are now handled differently in SDL3
 
-  // open audio device
-  device_id_ = SDL_OpenAudioDevice(nullptr, 0, &desired_spec, &audio_spec_,
-                                   SDL_AUDIO_ALLOW_FREQUENCY_CHANGE |
-                                       SDL_AUDIO_ALLOW_SAMPLES_CHANGE);
+  // open audio device stream with callback in SDL3
+  audio_stream_ =
+      SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                &desired_spec, audio_stream_callback, this);
 
-  if (device_id_ == 0) {
-    log_audio.error("failed to open SDL audio device",
+  if (!audio_stream_) {
+    log_audio.error("failed to open SDL audio device stream",
                     redlog::field("error", SDL_GetError()));
     return false;
   }
 
+  // get the actual audio format negotiated by SDL
+  if (!SDL_GetAudioStreamFormat(audio_stream_, nullptr, &audio_spec_)) {
+    log_audio.error("failed to get audio stream format",
+                    redlog::field("error", SDL_GetError()));
+    SDL_DestroyAudioStream(audio_stream_);
+    audio_stream_ = nullptr;
+    return false;
+  }
+
+  // audio_stream_ already checked above, continue with success path
+
   // log actual audio configuration
-  log_audio.inf("SDL audio device opened",
-                redlog::field("device_id", device_id_),
+  log_audio.inf("SDL audio device stream opened",
                 redlog::field("actual_freq", audio_spec_.freq),
-                redlog::field("actual_samples", audio_spec_.samples),
+                redlog::field("actual_format", audio_spec_.format),
                 redlog::field("actual_channels", audio_spec_.channels));
 
   // update configuration with actual values
-  if (audio_spec_.freq != sample_rate_ || audio_spec_.samples != buffer_size_) {
+  if (audio_spec_.freq != sample_rate_) {
     log_audio.warn("audio configuration adjusted by SDL",
                    redlog::field("requested_freq", sample_rate_),
-                   redlog::field("actual_freq", audio_spec_.freq),
-                   redlog::field("requested_samples", buffer_size_),
-                   redlog::field("actual_samples", audio_spec_.samples));
+                   redlog::field("actual_freq", audio_spec_.freq));
 
     sample_rate_ = audio_spec_.freq;
-    buffer_size_ = audio_spec_.samples;
     context_->sample_rate = sample_rate_;
     context_->buffer_size = buffer_size_;
 
@@ -229,24 +243,49 @@ bool SDLAudioEngine::open_audio_device() {
 }
 
 void SDLAudioEngine::close_audio_device() {
-  if (device_id_ > 0) {
-    SDL_CloseAudioDevice(device_id_);
-    device_id_ = 0;
+  if (audio_stream_) {
+    SDL_DestroyAudioStream(audio_stream_);
+    audio_stream_ = nullptr;
   }
 }
 
-// static SDL audio callback
-void SDLAudioEngine::audio_callback(void* userdata, Uint8* stream, int len) {
+// static SDL3 audio stream callback
+void SDLAudioEngine::audio_stream_callback(void* userdata,
+                                           SDL_AudioStream* stream,
+                                           int additional_amount,
+                                           int total_amount) {
   auto* engine = static_cast<SDLAudioEngine*>(userdata);
 
-  // calculate number of frames
-  int frames = len / (sizeof(float) * engine->channels_);
+  // convert bytes to samples
+  int samples_needed = additional_amount / (sizeof(float) * engine->channels_);
 
-  // process audio block
-  engine->process_audio_block(reinterpret_cast<float*>(stream), frames);
+  if (samples_needed <= 0) {
+    return; // stream has enough data
+  }
+
+  // process audio in chunks
+  while (samples_needed > 0) {
+    // use smaller buffer size to avoid excessive buffering
+    const int chunk_size = std::min(samples_needed, engine->buffer_size_);
+    const int bytes_to_generate =
+        chunk_size * engine->channels_ * sizeof(float);
+
+    // generate audio data
+    engine->generate_audio_chunk(engine->temp_buffer_.data(), chunk_size);
+
+    // feed data to the audio stream
+    if (SDL_PutAudioStreamData(stream, engine->temp_buffer_.data(),
+                               bytes_to_generate) < 0) {
+      log_audio.error("failed to put audio stream data",
+                      redlog::field("error", SDL_GetError()));
+      break;
+    }
+
+    samples_needed -= chunk_size;
+  }
 }
 
-void SDLAudioEngine::process_audio_block(float* output, int frames) {
+void SDLAudioEngine::generate_audio_chunk(float* output, int frames) {
   // clear output buffer
   util::clear_audio_buffer(output, frames * channels_);
 

@@ -17,16 +17,10 @@ void* GuiPlatform::extract_native_view(SDL_Window* window) {
   // ensure we're on the main thread for gui operations
   ensure_main_thread();
 
-  // get sdl window system info
-  SDL_SysWMinfo wm_info;
-  SDL_VERSION(&wm_info.version);
-
-  if (!SDL_GetWindowWMInfo(window, &wm_info)) {
-    return nullptr;
-  }
-
-  // extract the nswindow from sdl
-  NSWindow* ns_window = wm_info.info.cocoa.window;
+  // get nswindow using SDL3 properties
+  NSWindow* ns_window = (__bridge NSWindow*)SDL_GetPointerProperty(
+      SDL_GetWindowProperties(window), SDL_PROP_WINDOW_COCOA_WINDOW_POINTER,
+      NULL);
   if (!ns_window) {
     return nullptr;
   }

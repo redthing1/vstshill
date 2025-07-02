@@ -1,8 +1,8 @@
 #pragma once
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #ifdef HAVE_SDL_IMAGE
-#include <SDL_image.h>
+#include <SDL3_image/SDL_image.h>
 #endif
 #include <string>
 

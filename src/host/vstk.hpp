@@ -8,8 +8,8 @@
 #include <vector>
 
 // third-party includes
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_syswm.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_system.h>
 #include <redlog/redlog.hpp>
 
 // vst3 sdk includes

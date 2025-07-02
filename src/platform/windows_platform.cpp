@@ -13,16 +13,14 @@ void* GuiPlatform::extract_native_view(SDL_Window* window) {
     return nullptr;
   }
 
-  // get sdl window system info
-  SDL_SysWMinfo wm_info;
-  SDL_VERSION(&wm_info.version);
+  // get hwnd using SDL3 properties
+  HWND hwnd =
+      (HWND)SDL_GetPointerProperty(SDL_GetWindowProperties(window),
+                                   SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
 
-  if (!SDL_GetWindowWMInfo(window, &wm_info)) {
+  if (!hwnd) {
     return nullptr;
   }
-
-  // on windows, we use the hwnd directly
-  HWND hwnd = wm_info.info.win.window;
   return (void*)hwnd;
 }
 

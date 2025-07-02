@@ -799,20 +799,22 @@ Result<bool> GuiWindow::create() {
                                        std::to_string(view_rect.bottom)));
 
   // create sdl window with vst3-compatible flags
-  Uint32 window_flags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-
-#if SDL_VERSION_ATLEAST(2, 0, 1)
-  window_flags |= SDL_WINDOW_ALLOW_HIGHDPI; // enable high-dpi support
-#endif
+  Uint32 window_flags =
+      SDL_WINDOW_RESIZABLE; // SDL_WINDOW_SHOWN is default in SDL3
 
   std::string title =
       _plugin.name() + " (" + _plugin.vendor() + ") :: vstshill";
-  _window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
-                             SDL_WINDOWPOS_CENTERED, logical_width,
-                             logical_height, window_flags);
+  _window = SDL_CreateWindow(title.c_str(), logical_width, logical_height,
+                             window_flags);
+
+  // set window position after creation in SDL3
+  if (_window) {
+    SDL_SetWindowPosition(_window, SDL_WINDOWPOS_CENTERED,
+                          SDL_WINDOWPOS_CENTERED);
+  }
 
   if (!_window) {
-    return Result<bool>("Failed to create SDL window: " +
+    return Result<bool>("failed to create SDL window: " +
                         std::string(SDL_GetError()));
   }
 
@@ -1026,8 +1028,7 @@ void GuiWindow::process_events() {
 }
 
 void GuiWindow::handle_window_event(const SDL_Event& event) {
-  if (event.type == SDL_WINDOWEVENT &&
-      event.window.event == SDL_WINDOWEVENT_CLOSE) {
+  if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
     SDL_Window* window = SDL_GetWindowFromID(event.window.windowID);
 
     // find the corresponding guiwindow instance
@@ -1037,13 +1038,13 @@ void GuiWindow::handle_window_event(const SDL_Event& event) {
         break;
       }
     }
-  } else if (event.type == SDL_KEYDOWN) {
+  } else if (event.type == SDL_EVENT_KEY_DOWN) {
     bool should_close = false;
 
-    if (event.key.keysym.sym == SDLK_ESCAPE) {
+    if (event.key.key == SDLK_ESCAPE) {
       should_close = true;
-    } else if (event.key.keysym.sym == SDLK_q &&
-               (event.key.keysym.mod & (KMOD_CTRL | KMOD_GUI))) {
+    } else if (event.key.key == SDLK_Q &&
+               (event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
       should_close = true;
     }
 
