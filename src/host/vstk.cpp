@@ -147,23 +147,23 @@ Result<bool> Plugin::load(const std::string& plugin_path,
         return bus_result;
       }
 
-      // activate default buses before component activation
-      auto bus_activate_result = activate_default_buses();
-      if (!bus_activate_result) {
-        return bus_activate_result;
-      }
-
-      // configure processing
+      // configure processing setup before activation
       auto config_result = configure_processing();
       if (!config_result) {
         return config_result;
       }
 
-      // activate component
+      // activate component before bus operations
       if (_component->setActive(true) != kResultOk) {
         return Result<bool>("Failed to activate plugin component");
       }
       _is_active = true;
+
+      // activate default buses
+      auto bus_activate_result = activate_default_buses();
+      if (!bus_activate_result) {
+        return bus_activate_result;
+      }
 
       // discover parameters after successful initialization
       if (_edit_controller && !_parameter_manager->discover_parameters()) {

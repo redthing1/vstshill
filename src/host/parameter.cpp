@@ -271,8 +271,8 @@ ParameterManager::create_parameter_info(Steinberg::Vst::ParamID id) const {
   param_info.flags = vst_info.flags;
   param_info.is_discrete = (vst_info.stepCount > 0);
 
-  // test text conversion support
-  param_info.supports_text_conversion = validate_text_conversion(param_info);
+  // skip text conversion validation during initial loading
+  param_info.supports_text_conversion = false;
 
   // extract discrete values if applicable
   if (param_info.is_discrete) {
