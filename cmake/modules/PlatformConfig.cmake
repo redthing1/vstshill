@@ -25,7 +25,10 @@ if(MSVC)
         _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
     )
 else()
-    add_compile_options(-Wall -Wno-unused-parameter -Wno-gnu-zero-variadic-macro-arguments -Wno-ignored-qualifiers)
+    add_compile_options(-Wall -Wno-unused-parameter -Wno-ignored-qualifiers)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        add_compile_options(-Wno-gnu-zero-variadic-macro-arguments)
+    endif()
 endif()
 
 # platform-specific helpers
