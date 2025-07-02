@@ -516,6 +516,14 @@ void Plugin::stop_processing() {
     return;
   }
 
+  // clear any pending MIDI events to prevent stuck notes
+  if (_input_events) {
+    for (size_t i = 0; i < _info.event_inputs.size(); ++i) {
+      _input_events[i].clear();
+    }
+    _log.trc("cleared input event lists");
+  }
+
   if (_audio_processor) {
     _audio_processor->setProcessing(false);
   }
