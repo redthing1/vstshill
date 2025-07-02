@@ -805,7 +805,8 @@ Result<bool> GuiWindow::create() {
   window_flags |= SDL_WINDOW_ALLOW_HIGHDPI; // enable high-dpi support
 #endif
 
-  std::string title = _plugin.name() + " - " + _plugin.vendor() + " - vstshill";
+  std::string title =
+      _plugin.name() + " (" + _plugin.vendor() + ") :: vstshill";
   _window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
                              SDL_WINDOWPOS_CENTERED, logical_width,
                              logical_height, window_flags);
