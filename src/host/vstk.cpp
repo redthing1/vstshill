@@ -2,6 +2,7 @@
 #include "parameter.hpp"
 #include "platform/platform_gui.hpp"
 #include "constants.hpp"
+#include "util/icon_utils.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -823,6 +824,9 @@ Result<bool> GuiWindow::create() {
                                                std::to_string(logical_height)),
            redlog::field("actual_size", std::to_string(actual_width) + "x" +
                                             std::to_string(actual_height)));
+
+  // set application icon
+  util::set_application_icon(_window);
 
   // attach plugin view to native window
   auto attach_result = attach_plugin_view();

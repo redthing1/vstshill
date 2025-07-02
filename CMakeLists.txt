@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(vstshill
     VERSION 1.0.0
     DESCRIPTION "the vst inspector"
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 # standards
@@ -46,6 +46,23 @@ if(NOT SDL2_FOUND)
     endif()
 endif()
 
+# optional sdl2_image for better icon quality
+find_package(SDL2_image CONFIG QUIET)
+if(NOT SDL2_image_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SDL2_IMAGE SDL2_image)
+    endif()
+endif()
+
+if(SDL2_image_FOUND OR SDL2_IMAGE_FOUND)
+    set(HAS_SDL_IMAGE TRUE)
+    message(STATUS "sdl2_image found - will use high-quality png icons")
+else()
+    set(HAS_SDL_IMAGE FALSE)
+    message(STATUS "sdl2_image not found - will fallback to bmp icons")
+endif()
+
 if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
@@ -58,6 +75,7 @@ set(COMMON_SOURCES
     src/host/parameter.cpp
     src/host/minimal.cpp
     src/util/vst_discovery.cpp
+    src/util/icon_utils.cpp
     src/automation/automation.cpp
     src/util/string_utils.cpp
     src/util/audio_utils.cpp
@@ -97,7 +115,9 @@ add_executable(vstshill ${COMMON_SOURCES} ${PLATFORM_SOURCES})
 
 target_include_directories(vstshill PRIVATE
     src
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${SDL2_INCLUDE_DIRS}
+    $<$<BOOL:${HAS_SDL_IMAGE}>:${SDL2_IMAGE_INCLUDE_DIRS}>
     $<$<PLATFORM_ID:Linux>:${GTK3_INCLUDE_DIRS}>
 )
 
@@ -110,6 +130,34 @@ target_link_libraries(vstshill PRIVATE
     ${SDL2_LIBRARIES}
 )
 
+# link sdl2_image if available
+if(HAS_SDL_IMAGE)
+    target_compile_definitions(vstshill PRIVATE HAVE_SDL_IMAGE=1)
+    if(SDL2_image_FOUND)
+        target_link_libraries(vstshill PRIVATE SDL2_image::SDL2_image)
+    elseif(SDL2_IMAGE_FOUND)
+        target_link_libraries(vstshill PRIVATE ${SDL2_IMAGE_LIBRARIES})
+        target_link_directories(vstshill PRIVATE ${SDL2_IMAGE_LIBRARY_DIRS})
+    endif()
+endif()
+
+# on macOS, also create an app bundle version
+if(APPLE)
+    add_executable(vstshill-app MACOSX_BUNDLE ${COMMON_SOURCES} ${PLATFORM_SOURCES})
+    target_include_directories(vstshill-app PRIVATE src ${CMAKE_CURRENT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS} $<$<BOOL:${HAS_SDL_IMAGE}>:${SDL2_IMAGE_INCLUDE_DIRS}>)
+    target_link_directories(vstshill-app PRIVATE ${SDL2_LIBRARY_DIRS})
+    target_link_libraries(vstshill-app PRIVATE sdk_hosting redlog::redlog sndfile ${SDL2_LIBRARIES})
+    if(HAS_SDL_IMAGE)
+        target_compile_definitions(vstshill-app PRIVATE HAVE_SDL_IMAGE=1)
+        if(SDL2_image_FOUND)
+            target_link_libraries(vstshill-app PRIVATE SDL2_image::SDL2_image)
+        elseif(SDL2_IMAGE_FOUND)
+            target_link_libraries(vstshill-app PRIVATE ${SDL2_IMAGE_LIBRARIES})
+            target_link_directories(vstshill-app PRIVATE ${SDL2_IMAGE_LIBRARY_DIRS})
+        endif()
+    endif()
+endif()
+
 # platform-specific configuration
 if(APPLE)
     set_source_files_properties(
@@ -117,14 +165,27 @@ if(APPLE)
         src/platform/macos_platform.mm
         PROPERTIES COMPILE_FLAGS "-fobjc-arc"
     )
-    target_link_libraries(vstshill PRIVATE
-        "-framework CoreFoundation"
-        "-framework Foundation"
-        "-framework Cocoa"
-    )
+    
+    # configure app bundle with icon and metadata
+    set(MACOSX_BUNDLE_ICON_FILE vstshill_base.icns)
+    set(MACOSX_BUNDLE_BUNDLE_NAME "VST Shill")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION})
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.vstshill.app")
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/vstshill_base.icns
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    
+    target_sources(vstshill-app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/vstshill_base.icns)
+    
+    target_link_libraries(vstshill PRIVATE "-framework CoreFoundation" "-framework Foundation" "-framework Cocoa")
+    target_link_libraries(vstshill-app PRIVATE "-framework CoreFoundation" "-framework Foundation" "-framework Cocoa")
 elseif(WIN32)
     target_compile_options(vstshill PRIVATE /Zc:char8_t-)
     target_compile_options(sdk_hosting PRIVATE /Zc:char8_t-)
+    
+    # add windows icon resource
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/vstshill_base.ico 
+                   ${CMAKE_CURRENT_BINARY_DIR}/vstshill.ico COPYONLY)
     
     target_compile_definitions(vstshill PRIVATE
         _SILENCE_CXX20_U8PATH_DEPRECATION_WARNING
@@ -154,13 +215,13 @@ set_target_properties(vstshill PROPERTIES
 find_program(CLANG_FORMAT "clang-format")
 if(CLANG_FORMAT)
     add_custom_target(format
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format.cmake
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/format.cmake
         COMMENT "formatting source code with clang-format"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
     
     add_custom_target(format-check
-        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/scripts/format-check.cmake
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/format-check.cmake
         COMMENT "checking code formatting with clang-format"
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
