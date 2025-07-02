@@ -5,6 +5,7 @@
 #include "util/icon_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 
@@ -48,7 +49,7 @@ Plugin::Plugin(const redlog::logger& logger)
   // initialize sdl for gui support
   static bool sdl_initialized = false;
   if (!sdl_initialized) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
       _log.warn("failed to initialize sdl",
                 redlog::field("error", SDL_GetError()));
     } else {

@@ -45,7 +45,7 @@ bool SDLAudioEngine::initialize(int sample_rate, int buffer_size,
                 redlog::field("channels", channels));
 
   // initialize SDL audio subsystem
-  if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
+  if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
     log_audio.error("failed to initialize SDL audio",
                     redlog::field("error", SDL_GetError()));
     return false;
@@ -274,8 +274,8 @@ void SDLAudioEngine::audio_stream_callback(void* userdata,
     engine->generate_audio_chunk(engine->temp_buffer_.data(), chunk_size);
 
     // feed data to the audio stream
-    if (SDL_PutAudioStreamData(stream, engine->temp_buffer_.data(),
-                               bytes_to_generate) < 0) {
+    if (!SDL_PutAudioStreamData(stream, engine->temp_buffer_.data(),
+                                bytes_to_generate)) {
       log_audio.error("failed to put audio stream data",
                       redlog::field("error", SDL_GetError()));
       break;
