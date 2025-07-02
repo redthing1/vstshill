@@ -230,7 +230,8 @@ int ProcessCommand::execute() {
   }
 
   // resolve plugin path (supports both paths and names)
-  resolved_plugin_path_ = vstk::util::resolve_plugin_path(args::get(plugin_path_));
+  resolved_plugin_path_ =
+      vstk::util::resolve_plugin_path(args::get(plugin_path_));
   if (resolved_plugin_path_.empty()) {
     return 1;
   }
@@ -276,7 +277,8 @@ int ProcessCommand::execute() {
 bool ProcessCommand::validate_arguments() {
   // validate required arguments
   if (!plugin_path_ || !output_file_) {
-    log_main.err("plugin path or name and output file required for process command");
+    log_main.err(
+        "plugin path or name and output file required for process command");
     std::cerr << parser_;
     return false;
   }

@@ -19,7 +19,8 @@ namespace vstk {
 
 GuiCommand::GuiCommand(args::Subparser& parser)
     : parser_(parser),
-      plugin_path_(parser, "plugin_path", "path or name of vst3 plugin to open in gui"),
+      plugin_path_(parser, "plugin_path",
+                   "path or name of vst3 plugin to open in gui"),
       audio_output_(parser, "audio",
                     "enable real-time audio output (experimental)", {"audio"}) {
 }
@@ -112,7 +113,8 @@ void GuiCommand::open_plugin_gui(const std::string& plugin_path,
     }
   }
 
-  log.inf("entering gui event loop (close window to exit)");
+  log.inf(
+      "entering gui event loop (close window, ESC, or Ctrl+Q/Cmd+Q to exit)");
   while (window->is_open()) {
     vstk::GuiWindow::process_events();
 #ifdef _WIN32

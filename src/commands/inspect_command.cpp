@@ -10,8 +10,8 @@ extern void apply_verbosity();
 namespace vstk {
 
 InspectCommand::InspectCommand(args::Subparser& parser)
-    : parser_(parser),
-      plugin_path_(parser, "plugin_path", "path or name of vst3 plugin to inspect") {}
+    : parser_(parser), plugin_path_(parser, "plugin_path",
+                                    "path or name of vst3 plugin to inspect") {}
 
 int InspectCommand::execute() {
   apply_verbosity();
