@@ -19,6 +19,13 @@ else()
     add_compile_definitions(RELEASE=1)
 endif()
 
+# optional sanitizers
+option(VSTSHILL_SANITIZERS "enable address and undefined behavior sanitizers" OFF)
+if(VSTSHILL_SANITIZERS AND NOT MSVC)
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 # compiler warnings
 if(MSVC)
     add_compile_options(/W3)
