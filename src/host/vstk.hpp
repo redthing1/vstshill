@@ -143,7 +143,7 @@ class Plugin;
 class GuiWindow;
 class ParameterManager;
 
-// raii wrapper for vst3 host context - singleton pattern
+// vst3 host context - singleton
 class HostContext {
 public:
   static HostContext& instance();
@@ -158,8 +158,7 @@ private:
   redlog::logger _log;
 };
 
-// main vst3 plugin wrapper with raii and comprehensive error handling
-// supports both audio processing and gui editor functionality
+// vst3 plugin wrapper with error handling
 class Plugin {
   friend class GuiWindow;
   friend class ParameterManager;
@@ -262,7 +261,7 @@ private:
   std::unique_ptr<ParameterManager> _parameter_manager;
 };
 
-// iplugframe implementation for handling plugin resize requests
+// iplugframe implementation for resize requests
 class GuiPlugFrame : public Steinberg::IPlugFrame {
 public:
   explicit GuiPlugFrame(class GuiWindow* window) : _window(window) {}
@@ -281,8 +280,7 @@ private:
   class GuiWindow* _window;
 };
 
-// cross-platform gui window wrapper for vst3 plugin editors
-// handles platform-specific windowing and plugin view attachment
+// cross-platform gui window for vst3 editors
 class GuiWindow {
 public:
   GuiWindow(Plugin& plugin,

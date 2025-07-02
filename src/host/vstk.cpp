@@ -47,10 +47,9 @@ Plugin::Plugin(const redlog::logger& logger)
   static bool sdl_initialized = false;
   if (!sdl_initialized) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-      _log.warn("failed to initialize sdl for gui support",
-                redlog::field("error", SDL_GetError()));
+      _log.warn("failed to initialize sdl", redlog::field("error", SDL_GetError()));
     } else {
-      _log.trc("sdl initialized for gui support");
+      _log.trc("sdl initialized");
       sdl_initialized = true;
     }
   }
@@ -65,10 +64,10 @@ Result<bool> Plugin::load(const std::string& plugin_path,
                           const PluginConfig& config) {
   _log.inf("loading vst3 plugin", redlog::field("path", plugin_path));
 
-  // ensure we have host context
+  // ensure host context
   HostContext::instance();
 
-  // clean up any existing plugin
+  // clean up existing plugin
   if (is_loaded()) {
     unload();
   }
@@ -76,7 +75,7 @@ Result<bool> Plugin::load(const std::string& plugin_path,
   _config = config;
   _info.path = plugin_path;
 
-  // load vst3 module
+  // load module
   std::string error_description;
   _module = VST3::Hosting::Module::create(plugin_path, error_description);
   if (!_module) {
@@ -85,11 +84,9 @@ Result<bool> Plugin::load(const std::string& plugin_path,
     return Result<bool>("Failed to load VST3 module: " + error_description);
   }
 
-  _log.dbg("module loaded successfully",
-           redlog::field("module_path", _module->getPath()),
-           redlog::field("module_name", _module->getName()));
+  _log.dbg("module loaded", redlog::field("path", _module->getPath()));
 
-  // get plugin factory and find audio effect
+  // get factory and find audio effect
   auto factory = _module->getFactory();
   auto factory_info = factory.info();
 
@@ -103,7 +100,7 @@ Result<bool> Plugin::load(const std::string& plugin_path,
     if (class_info.category() == kVstAudioEffectClass) {
       found_audio_effect = true;
 
-      // store plugin info
+      // store info
       _info.name = class_info.name();
       _info.vendor = class_info.vendor();
       _info.version = class_info.version();
@@ -113,18 +110,18 @@ Result<bool> Plugin::load(const std::string& plugin_path,
                redlog::field("vendor", _info.vendor),
                redlog::field("version", _info.version));
 
-      // create plugin provider
+      // create provider
       _plugin_provider = owned(new PlugProvider(factory, class_info, true));
       if (!_plugin_provider) {
         return Result<bool>("Failed to create plugin provider");
       }
 
-      // initialize the plugin provider
+      // initialize provider
       if (!_plugin_provider->initialize()) {
         return Result<bool>("Failed to initialize plugin provider");
       }
 
-      // get component interfaces
+      // get interfaces
       _component = _plugin_provider->getComponentPtr();
       if (!_component) {
         return Result<bool>("Failed to get plugin component");
@@ -138,10 +135,9 @@ Result<bool> Plugin::load(const std::string& plugin_path,
       _edit_controller = _plugin_provider->getControllerPtr();
       _info.has_editor = (_edit_controller != nullptr);
 
-      _log.dbg("plugin interfaces created successfully",
-               redlog::field("has_editor", _info.has_editor));
+      _log.dbg("interfaces created", redlog::field("has_editor", _info.has_editor));
 
-      // setup bus information
+      // setup buses
       auto bus_result = setup_buses();
       if (!bus_result) {
         return bus_result;
@@ -174,7 +170,7 @@ Result<bool> Plugin::load(const std::string& plugin_path,
                                _parameter_manager->parameters().size()));
       }
 
-      _log.inf("plugin loaded successfully", redlog::field("name", _info.name));
+      _log.inf("plugin loaded", redlog::field("name", _info.name));
       break;
     }
   }
@@ -191,7 +187,7 @@ void Plugin::unload() {
     return;
   }
 
-  _log.dbg("unloading plugin", redlog::field("name", _info.name));
+  _log.dbg("unloading", redlog::field("name", _info.name));
 
   stop_processing();
 
@@ -201,7 +197,7 @@ void Plugin::unload() {
   }
 
   reset_state();
-  _log.dbg("plugin unloaded successfully");
+  _log.dbg("plugin unloaded");
 }
 
 Result<bool> Plugin::setup_buses() {
@@ -220,7 +216,7 @@ Result<bool> Plugin::setup_buses() {
            redlog::field("event_inputs", num_event_inputs),
            redlog::field("event_outputs", num_event_outputs));
 
-  // setup audio input buses
+  // setup audio inputs
   _info.audio_inputs.clear();
   _input_arrangements.clear();
   for (int32_t i = 0; i < num_audio_inputs; ++i) {
@@ -244,7 +240,7 @@ Result<bool> Plugin::setup_buses() {
     }
   }
 
-  // setup audio output buses
+  // setup audio outputs
   _info.audio_outputs.clear();
   _output_arrangements.clear();
   for (int32_t i = 0; i < num_audio_outputs; ++i) {
@@ -335,7 +331,7 @@ Result<bool> Plugin::activate_default_buses() {
     }
   }
 
-  _log.trc("default bus activation completed");
+  _log.trc("bus activation completed");
   return Result<bool>(true);
 }
 
@@ -404,7 +400,7 @@ Result<bool> Plugin::configure_processing() {
              redlog::field("parameter_count", _info.parameter_count));
   }
 
-  _log.dbg("audio processing configured successfully");
+  _log.dbg("processing configured");
   return Result<bool>(true);
 }
 
@@ -417,7 +413,7 @@ Result<bool> Plugin::prepare_processing() {
     return Result<bool>(true);
   }
 
-  // default process context setup
+  // setup process context
   util::setup_process_context(_process_context, _config.sample_rate);
 
   _log.dbg("processing prepared");
@@ -429,9 +425,9 @@ Result<bool> Plugin::refresh_audio_buffers() {
     return Result<bool>("Plugin not loaded");
   }
 
-  _log.trc("refreshing audio buffers after bus activation");
+  _log.trc("refreshing audio buffers");
 
-  // re-setup processing with activated bus configuration
+  // re-setup processing
   tresult result = _audio_processor->setupProcessing(_process_setup);
   if (result != kResultOk) {
     _log.error("failed to re-setup processing after bus activation",
@@ -439,12 +435,11 @@ Result<bool> Plugin::refresh_audio_buffers() {
     return Result<bool>("Failed to re-setup processing after bus activation");
   }
 
-  // re-prepare process data with current bus configuration
-  // this ensures buffers are allocated for active buses
+  // re-prepare process data
   _process_data.prepare(*_component, _config.max_block_size,
                         static_cast<int32>(_config.sample_size));
 
-  _log.trc("audio buffers refreshed successfully");
+  _log.trc("buffers refreshed");
   return Result<bool>(true);
 }
 
@@ -454,9 +449,8 @@ Result<bool> Plugin::start_processing() {
     return prepare_result;
   }
 
-  // Follow Steinberg's official VST3 SDK pattern (audioclient.cpp lines
-  // 348-378)
-  _log.trc("stopping any existing processing before restart");
+  // follow vst3 sdk pattern
+  _log.trc("stopping existing processing");
   if (_is_processing && _audio_processor) {
     _audio_processor->setProcessing(false);
     _is_processing = false;
@@ -466,61 +460,54 @@ Result<bool> Plugin::start_processing() {
     _is_active = false;
   }
 
-  // Setup processing configuration (Steinberg's exact approach)
+  // setup processing configuration
   ProcessSetup setup{static_cast<int32>(_config.process_mode),
                      static_cast<int32>(_config.sample_size),
                      _config.max_block_size,
                      static_cast<SampleRate>(_config.sample_rate)};
 
-  _log.trc("calling setupProcessing with Steinberg's pattern");
+  _log.trc("calling setupProcessing");
   if (_audio_processor->setupProcessing(setup) != kResultOk) {
     return Result<bool>("Failed to setup processing");
   }
 
-  // Activate component (always check this return value)
+  // activate component
   _log.trc("activating component");
   if (_component->setActive(true) != kResultOk) {
     return Result<bool>("Failed to activate component");
   }
   _is_active = true;
 
-  // Prepare process data AFTER component is active (Steinberg's pattern)
-  _log.trc("preparing process data after activation");
+  // prepare process data after activation
+  _log.trc("preparing process data");
   _process_data.prepare(*_component, _config.max_block_size,
                         static_cast<int32>(_config.sample_size));
 
-  // Re-setup event lists after prepare (prepare() may clear
-  // inputEvents/outputEvents) Force re-allocation of event lists if needed
+  // re-setup event lists after prepare
   if (!_info.event_inputs.empty()) {
     if (!_input_events) {
-      _log.trc("re-allocating input event lists after prepare",
-               redlog::field("event_input_count", _info.event_inputs.size()));
+      _log.trc("re-allocating input event lists");
       _input_events = std::make_unique<EventList[]>(_info.event_inputs.size());
     }
     _process_data.inputEvents = _input_events.get();
-    _log.trc("restored input event list after prepare");
+    _log.trc("restored input event list");
   }
   if (!_info.event_outputs.empty()) {
     if (!_output_events) {
-      _log.trc("re-allocating output event lists after prepare",
-               redlog::field("event_output_count", _info.event_outputs.size()));
+      _log.trc("re-allocating output event lists");
       _output_events =
           std::make_unique<EventList[]>(_info.event_outputs.size());
     }
     _process_data.outputEvents = _output_events.get();
-    _log.trc("restored output event list after prepare");
+    _log.trc("restored output event list");
   }
 
-  // Start processing - IGNORE RETURN VALUE like Steinberg's official examples
-  // do! From audioclient.cpp: processor->setProcessing(true); // != kResultOk
-  // (commented out error check)
-  _log.trc("calling setProcessing(true) - ignoring return value per VST3 SDK "
-           "pattern");
-  _audio_processor->setProcessing(true); // Deliberately ignore return value
+  // start processing (ignore return value per vst3 sdk pattern)
+  _log.trc("calling setProcessing(true)");
+  _audio_processor->setProcessing(true);
 
-  _is_processing = true; // Assume success like Steinberg does
-  _log.dbg("processing started using Steinberg's pattern",
-           redlog::field("_is_processing", _is_processing));
+  _is_processing = true;
+  _log.dbg("processing started");
   return Result<bool>(true);
 }
 
@@ -570,7 +557,7 @@ Result<bool> Plugin::set_bus_active(MediaType type, BusDirection direction,
     return Result<bool>("Failed to set bus active state");
   }
 
-  // update our bus info
+  // update bus info
   std::vector<BusConfiguration>* bus_configs = nullptr;
   if (type == MediaType::Audio) {
     bus_configs = (direction == BusDirection::Input) ? &_info.audio_inputs
@@ -646,7 +633,7 @@ Sample64* Plugin::get_audio_buffer_64(BusDirection direction, int32_t bus_index,
 EventList* Plugin::get_event_list(BusDirection direction,
                                   int32_t bus_index) const {
   if (direction == BusDirection::Input && _input_events) {
-    // add bounds checking for event input buses
+    // bounds checking for event inputs
     if (bus_index >= 0 &&
         bus_index < static_cast<int32_t>(_info.event_inputs.size())) {
       _log.dbg("returning event input list",
@@ -660,7 +647,7 @@ EventList* Plugin::get_event_list(BusDirection direction,
       return nullptr;
     }
   } else if (direction == BusDirection::Output && _output_events) {
-    // add bounds checking for event output buses
+    // bounds checking for event outputs
     if (bus_index >= 0 &&
         bus_index < static_cast<int32_t>(_info.event_outputs.size())) {
       _log.dbg(
@@ -676,7 +663,7 @@ EventList* Plugin::get_event_list(BusDirection direction,
     }
   }
 
-  // log detailed reason for returning nullptr
+  // log reason for null return
   if (direction == BusDirection::Input) {
     if (!_input_events) {
       _log.warn("no event input list available - _input_events is null",
@@ -782,13 +769,13 @@ Result<bool> GuiWindow::create() {
     return Result<bool>("Plugin does not have an editor");
   }
 
-  _log.dbg("creating plugin editor window");
+  _log.dbg("creating editor window");
 
-  // create plugin view
+  // create view
   _plugin_view = _plugin._edit_controller->createView(ViewType::kEditor);
   if (!_plugin_view) {
-    _log.warn("plugin does not provide an editor view (headless plugin)");
-    return Result<bool>(true); // Not an error, just headless
+    _log.warn("plugin has no editor view");
+    return Result<bool>(true);
   }
 
   // get view size
@@ -824,7 +811,7 @@ Result<bool> GuiWindow::create() {
                         std::string(SDL_GetError()));
   }
 
-  // log window creation details
+  // log window details
   int actual_width, actual_height;
   SDL_GetWindowSize(_window, &actual_width, &actual_height);
 
@@ -842,19 +829,18 @@ Result<bool> GuiWindow::create() {
     return attach_result;
   }
 
-  // setup content scaling after attaching the view
+  // setup content scaling
   auto scaling_result = setup_content_scaling();
   if (!scaling_result) {
     _log.warn("content scaling setup failed",
               redlog::field("error", scaling_result.error()));
-    // continue anyway, scaling is optional
+    // continue, scaling is optional
   }
 
-  // add to active windows for event processing
+  // add to active windows
   _active_windows.push_back(this);
 
-  _log.inf("editor window created successfully",
-           redlog::field("plugin", _plugin.name()));
+  _log.inf("editor window created", redlog::field("plugin", _plugin.name()));
   return Result<bool>(true);
 }
 
@@ -871,20 +857,20 @@ void GuiWindow::destroy() {
     _active_windows.erase(it);
   }
 
-  // detach and destroy plugin view
+  // detach and destroy view
   if (_plugin_view) {
     _plugin_view->setFrame(nullptr);
     _plugin_view->removed();
     _plugin_view = nullptr;
   }
 
-  // clean up native view
+  // cleanup native view
   if (_native_view) {
     platform::GuiPlatform::cleanup_native_view(_native_view);
     _native_view = nullptr;
   }
 
-  // destroy sdl window
+  // destroy window
   if (_window) {
     SDL_DestroyWindow(_window);
     _window = nullptr;
@@ -898,22 +884,22 @@ Result<bool> GuiWindow::attach_plugin_view() {
     return Result<bool>("Window or plugin view not available");
   }
 
-  // extract platform-specific native view
+  // extract native view
   void* native_view = platform::GuiPlatform::extract_native_view(_window);
   if (!native_view) {
     return Result<bool>("Failed to extract native view from SDL window");
   }
 
-  // get the platform type string
+  // get platform type
   const char* platform_type = platform::GuiPlatform::get_platform_type();
 
-  // verify platform compatibility
+  // verify compatibility
   if (_plugin_view->isPlatformTypeSupported(platform_type) != kResultTrue) {
     platform::GuiPlatform::cleanup_native_view(native_view);
     return Result<bool>("Plugin editor does not support this platform type");
   }
 
-  // set iplugframe before attaching
+  // set frame before attaching
   _plugin_view->setFrame(&_plug_frame);
 
   // attach plugin view to native window
@@ -924,10 +910,9 @@ Result<bool> GuiWindow::attach_plugin_view() {
     return Result<bool>("Failed to attach plugin view to native window");
   }
 
-  _log.dbg("plugin view attached successfully",
-           redlog::field("platform_type", platform_type));
+  _log.dbg("view attached", redlog::field("platform_type", platform_type));
 
-  // store native view for cleanup
+  // store for cleanup
   _native_view = native_view;
 
   return Result<bool>(true);
@@ -938,7 +923,7 @@ Result<bool> GuiWindow::setup_content_scaling() {
     return Result<bool>("No plugin view available for content scaling");
   }
 
-  // get the current plugin view size
+  // get current view size
   ViewRect current_rect;
   if (_plugin_view->getSize(&current_rect) != kResultOk) {
     return Result<bool>("Failed to get plugin view size for scaling");
@@ -947,22 +932,20 @@ Result<bool> GuiWindow::setup_content_scaling() {
   int current_width = current_rect.getWidth();
   int current_height = current_rect.getHeight();
 
-  // use configured maximum window size
+  // use max window size
   const int max_width = gui::max_window_width;
   const int max_height = gui::max_window_height;
 
-  // calculate if we need to scale down
+  // check if scaling needed
   bool needs_scaling =
       (current_width > max_width || current_height > max_height);
 
   if (!needs_scaling) {
-    _log.dbg("plugin size is acceptable, no scaling needed",
-             redlog::field("current_size", std::to_string(current_width) + "x" +
-                                               std::to_string(current_height)));
+    _log.dbg("size acceptable, no scaling needed");
     return Result<bool>(true);
   }
 
-  // calculate the scale factor to fit within bounds
+  // calculate scale factor
   float width_scale = static_cast<float>(max_width) / current_width;
   float height_scale = static_cast<float>(max_height) / current_height;
   float content_scale = std::min(width_scale, height_scale);
@@ -974,7 +957,7 @@ Result<bool> GuiWindow::setup_content_scaling() {
                                          std::to_string(max_height)),
            redlog::field("scale_factor", content_scale));
 
-  // try vst3 content scaling first
+  // try vst3 content scaling
   FUnknownPtr<IPlugViewContentScaleSupport> scale_support(_plugin_view);
   if (scale_support) {
     tresult scale_result = scale_support->setContentScaleFactor(content_scale);
@@ -984,20 +967,19 @@ Result<bool> GuiWindow::setup_content_scaling() {
              redlog::field("content_scale", content_scale));
 
     if (scale_result == kResultOk) {
-      _log.inf("plugin successfully scaled using vst3 content scaling",
-               redlog::field("scale_factor", content_scale));
-      // no need to resize window - we created it at the right size already
+      _log.inf("plugin scaled using vst3", redlog::field("scale_factor", content_scale));
+      // window already correct size
       return Result<bool>(true);
     }
   }
 
-  // fallback: force resize with onsize
+  // fallback: force resize
   _log.dbg("vst3 content scaling not supported, attempting forced resize");
 
   int target_width = static_cast<int>(current_width * content_scale);
   int target_height = static_cast<int>(current_height * content_scale);
 
-  // ensure we don't go below minimums
+  // ensure minimums
   target_width = std::max(target_width, gui::min_window_width);
   target_height = std::max(target_height, gui::min_window_height);
 
@@ -1016,13 +998,11 @@ Result<bool> GuiWindow::setup_content_scaling() {
 
   if (resize_result == kResultOk) {
     // no need to resize window - we created it at the right size already
-    _log.inf("plugin successfully resized using forced onSize method",
-             redlog::field("target_size", std::to_string(target_width) + "x" +
-                                              std::to_string(target_height)));
+    _log.inf("plugin resized using onSize");
     return Result<bool>(true);
   }
 
-  // last resort: partial success
+  // partial success
   _log.warn("plugin rejected forced resize, but window size is correct");
 
   return Result<bool>("Plugin scaling partially successful (window resized but "
@@ -1106,7 +1086,7 @@ tresult GuiWindow::handle_plugin_resize(IPlugView* view, ViewRect* newSize) {
     return kInternalError;
   }
 
-  // check if size actually changed
+  // check if size changed
   if (current_rect.left == newSize->left && current_rect.top == newSize->top &&
       current_rect.right == newSize->right &&
       current_rect.bottom == newSize->bottom) {
@@ -1114,7 +1094,7 @@ tresult GuiWindow::handle_plugin_resize(IPlugView* view, ViewRect* newSize) {
     return kResultTrue;
   }
 
-  // resize sdl window
+  // resize window
   int new_width = newSize->right - newSize->left;
   int new_height = newSize->bottom - newSize->top;
 
@@ -1127,7 +1107,7 @@ tresult GuiWindow::handle_plugin_resize(IPlugView* view, ViewRect* newSize) {
 
   SDL_SetWindowSize(_window, new_width, new_height);
 
-  // update plugin view if final size differs
+  // update view if size differs
   ViewRect final_rect;
   if (_plugin_view->getSize(&final_rect) == kResultTrue) {
     if (final_rect.left != newSize->left || final_rect.top != newSize->top ||
@@ -1161,7 +1141,7 @@ void setup_process_context(ProcessContext& context, double sample_rate,
                            int32_t time_sig_denominator) {
   std::memset(&context, 0, sizeof(ProcessContext));
 
-  // Essential state flags for synthesizer compatibility (VST3 SDK pattern)
+  // essential state flags for synthesizer compatibility
   context.state = ProcessContext::kPlaying | ProcessContext::kTempoValid |
                   ProcessContext::kTimeSigValid |
                   ProcessContext::kProjectTimeMusicValid |
@@ -1170,14 +1150,14 @@ void setup_process_context(ProcessContext& context, double sample_rate,
   context.sampleRate = sample_rate;
   context.projectTimeSamples = sample_position;
   context.systemTime = 0;
-  context.continousTimeSamples = sample_position; // Critical for synthesizers
+  context.continousTimeSamples = sample_position;
 
-  // Musical timing calculations (VST3 SDK pattern)
+  // musical timing calculations
   double samples_per_quarter_note = 60.0 * sample_rate / tempo;
   context.projectTimeMusic =
       static_cast<double>(sample_position) / samples_per_quarter_note;
 
-  // Bar position for 4/4 time (VST3 SDK standard)
+  // bar position for 4/4 time
   double quarter_notes_per_bar =
       time_sig_numerator * (4.0 / time_sig_denominator);
   context.barPositionMusic =
@@ -1188,23 +1168,23 @@ void setup_process_context(ProcessContext& context, double sample_rate,
   context.tempo = tempo;
   context.timeSigNumerator = time_sig_numerator;
   context.timeSigDenominator = time_sig_denominator;
-  context.chord = {0}; // no chord info
+  context.chord = {0};
   context.smpteOffsetSubframes = 0;
   context.frameRate = {};
 }
 
 void update_process_context(ProcessContext& context, int32_t block_size) {
-  // Update continuous time samples (VST3 SDK pattern)
+  // update continuous time samples
   context.continousTimeSamples += block_size;
   context.projectTimeSamples += block_size;
 
-  // Update musical time position (VST3 SDK calculation)
+  // update musical time position
   double samples_per_quarter_note = 60.0 * context.sampleRate / context.tempo;
   double quarter_notes_this_block =
       static_cast<double>(block_size) / samples_per_quarter_note;
   context.projectTimeMusic += quarter_notes_this_block;
 
-  // Update bar position for 4/4 time (VST3 SDK pattern)
+  // update bar position for 4/4 time
   double quarter_notes_per_bar =
       context.timeSigNumerator * (4.0 / context.timeSigDenominator);
   context.barPositionMusic =
