@@ -1,9 +1,15 @@
+
 # vstshill
 
 the vst inspector.
 
-the goal is to be an ultra-lightweight cross-platform vst host for analyzing plugins.
-this will support cli, gui, and offline loading and inspection of plugins.
+an ultra-lightweight cross-platform vst3 host for analyzing plugins.
+
+## features
+
++ load plugins
++ gui host with sdl2
++ offline processing of video files
 
 ## build
 
