@@ -37,6 +37,7 @@ private:
   args::ValueFlagList<std::string> parameters_;
   args::ValueFlag<std::string> automation_file_;
   args::ValueFlag<std::string> preset_file_;
+  args::ValueFlag<std::string> midi_file_;
 
   args::Flag dry_run_;
   args::Flag quiet_;

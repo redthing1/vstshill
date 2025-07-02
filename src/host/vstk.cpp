@@ -1,6 +1,7 @@
 #include "vstk.hpp"
 #include "parameter.hpp"
 #include "platform/platform_gui.hpp"
+#include "constants.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -47,7 +48,8 @@ Plugin::Plugin(const redlog::logger& logger)
   static bool sdl_initialized = false;
   if (!sdl_initialized) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-      _log.warn("failed to initialize sdl", redlog::field("error", SDL_GetError()));
+      _log.warn("failed to initialize sdl",
+                redlog::field("error", SDL_GetError()));
     } else {
       _log.trc("sdl initialized");
       sdl_initialized = true;
@@ -135,7 +137,8 @@ Result<bool> Plugin::load(const std::string& plugin_path,
       _edit_controller = _plugin_provider->getControllerPtr();
       _info.has_editor = (_edit_controller != nullptr);
 
-      _log.dbg("interfaces created", redlog::field("has_editor", _info.has_editor));
+      _log.dbg("interfaces created",
+               redlog::field("has_editor", _info.has_editor));
 
       // setup buses
       auto bus_result = setup_buses();
@@ -514,14 +517,6 @@ Result<bool> Plugin::start_processing() {
 void Plugin::stop_processing() {
   if (!_is_processing) {
     return;
-  }
-
-  // clear any pending MIDI events to prevent stuck notes
-  if (_input_events) {
-    for (size_t i = 0; i < _info.event_inputs.size(); ++i) {
-      _input_events[i].clear();
-    }
-    _log.trc("cleared input event lists");
   }
 
   if (_audio_processor) {
@@ -975,7 +970,8 @@ Result<bool> GuiWindow::setup_content_scaling() {
              redlog::field("content_scale", content_scale));
 
     if (scale_result == kResultOk) {
-      _log.inf("plugin scaled using vst3", redlog::field("scale_factor", content_scale));
+      _log.inf("plugin scaled using vst3",
+               redlog::field("scale_factor", content_scale));
       // window already correct size
       return Result<bool>(true);
     }

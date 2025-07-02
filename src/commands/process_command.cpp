@@ -2,7 +2,7 @@
 #include "../host/constants.hpp"
 #include "../host/parameter.hpp"
 #include "../util/audio_utils.hpp"
-#include "../util/midi_utils.hpp"
+#include "../util/midi_file.hpp"
 #include "../util/string_utils.hpp"
 #include "../util/vst_discovery.hpp"
 #include <algorithm>
@@ -88,25 +88,70 @@ void apply_parameter_settings(vstk::Plugin& plugin,
   }
 }
 
-// add MIDI note-on event for instrument plugins
-void add_instrument_midi_event(vstk::Plugin& plugin, double sample_rate,
-                               const redlog::logger& log) {
-  auto* event_list = plugin.get_event_list(vstk::BusDirection::Input, 0);
-  if (event_list) {
-    auto event = vstk::util::create_note_on_event(
-        vstk::constants::MIDI_MIDDLE_C, vstk::constants::MIDI_DEFAULT_VELOCITY,
-        vstk::constants::MIDI_DEFAULT_CHANNEL,
-        vstk::constants::MIDI_NOTE_DURATION_SECONDS, sample_rate);
+class MidiEventManager {
+public:
+  explicit MidiEventManager(const redlog::logger& log) : log_(log) {}
 
-    auto add_result = event_list->addEvent(event);
-    log.inf("added MIDI note-on event",
-            redlog::field("pitch", event.noteOn.pitch),
-            redlog::field("velocity", event.noteOn.velocity),
-            redlog::field("add_result", static_cast<int>(add_result)));
-  } else {
-    log.warn("no event list available for MIDI input");
+  MidiEventManager(const MidiEventManager&) = delete;
+  MidiEventManager& operator=(const MidiEventManager&) = delete;
+
+  bool initialize(const std::string& midi_file_path, double sample_rate,
+                  double duration, bool is_instrument) {
+    if (!is_instrument) {
+      log_.trc("skipping MIDI setup for effect plugin");
+      return true;
+    }
+
+    if (!midi_file_path.empty()) {
+      return load_midi_file(midi_file_path);
+    } else {
+      return create_default_sequence(sample_rate, duration);
+    }
   }
-}
+
+  void add_events_for_block(vstk::Plugin& plugin, double start_time,
+                            double end_time) {
+    auto* event_list = plugin.get_event_list(vstk::BusDirection::Input, 0);
+    if (!event_list) {
+      return;
+    }
+
+    for (const auto& midi_event : midi_events_) {
+      if (midi_event.timestamp_seconds >= start_time &&
+          midi_event.timestamp_seconds < end_time) {
+        auto vst_event = midi_event.vst_event;
+        vst_event.sampleOffset = 0;
+        event_list->addEvent(vst_event);
+      }
+    }
+  }
+
+private:
+  bool load_midi_file(const std::string& filepath) {
+    auto reader = std::make_unique<vstk::util::MidiFileReader>();
+    if (!reader->load_file(filepath)) {
+      log_.error("failed to load MIDI file", redlog::field("path", filepath));
+      return false;
+    }
+
+    midi_events_ = reader->events();
+    log_.inf("loaded MIDI file", redlog::field("path", filepath),
+             redlog::field("events", midi_events_.size()),
+             redlog::field("duration", reader->duration()));
+    return true;
+  }
+
+  bool create_default_sequence(double sample_rate, double duration) {
+    midi_events_ =
+        vstk::util::create_basic_midi_sequence(sample_rate, duration);
+    log_.inf("created default MIDI sequence",
+             redlog::field("events", midi_events_.size()));
+    return true;
+  }
+
+  const redlog::logger& log_;
+  std::vector<vstk::util::MidiEvent> midi_events_;
+};
 
 // apply parameter automation for current frame position
 void apply_parameter_automation(vstk::Plugin& plugin,
@@ -211,6 +256,7 @@ ProcessCommand::ProcessCommand(args::Subparser& parser)
       automation_file_(parser, "automation", "json automation file",
                        {'a', "automation"}),
       preset_file_(parser, "preset", "load plugin preset file", {"preset"}),
+      midi_file_(parser, "midi", "midi file for instrument plugins", {"midi"}),
       dry_run_(parser, "dry-run", "validate setup without processing",
                {'n', "dry-run"}),
       quiet_(parser, "quiet", "minimal output (errors only)", {'q', "quiet"}),
@@ -486,6 +532,17 @@ int ProcessCommand::run_audio_processing_loop(
             redlog::field("output_buses", output_buses));
 
     bool has_input_audio = audio_reader.is_valid();
+    bool is_instrument = !has_input_audio && input_buses == 0;
+
+    // setup MIDI events for instruments
+    MidiEventManager midi_manager(log);
+    std::string midi_file_path = midi_file_ ? args::get(midi_file_) : "";
+    double processing_duration = total_frames / sample_rate;
+
+    if (!midi_manager.initialize(midi_file_path, sample_rate,
+                                 processing_duration, is_instrument)) {
+      return 1;
+    }
 
     // prepare plugin for processing
     auto prepare_result = plugin.prepare_processing();
@@ -551,9 +608,11 @@ int ProcessCommand::run_audio_processing_loop(
       // apply automation for current position
       apply_parameter_automation(plugin, automation, frames_processed, log);
 
-      // add basic MIDI events for instruments (when no audio input)
-      if (!has_input_audio && frames_processed == 0) {
-        add_instrument_midi_event(plugin, sample_rate, log);
+      // add MIDI events for current time window
+      if (is_instrument) {
+        double current_time = frames_processed / sample_rate;
+        double end_time = (frames_processed + frames_to_process) / sample_rate;
+        midi_manager.add_events_for_block(plugin, current_time, end_time);
       }
 
       // process audio through plugin

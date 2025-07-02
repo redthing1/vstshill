@@ -19,8 +19,6 @@ struct AudioProcessingContext {
   int sample_rate = 44100;
   int buffer_size = 512;
   int channels = 2;
-  bool add_midi_events = false;
-  bool midi_events_added = false;
   std::atomic<bool> processing_enabled{false};
 };
 
@@ -95,13 +93,11 @@ bool SDLAudioEngine::connect_plugin(Plugin& plugin) {
     return false;
   }
 
-  // check if plugin is an instrument (no audio inputs)
   int input_buses = plugin.bus_count(MediaType::Audio, BusDirection::Input);
-  context_->add_midi_events = (input_buses == 0);
-
+  
   log_audio.inf("plugin connected successfully",
                 redlog::field("input_buses", input_buses),
-                redlog::field("is_instrument", context_->add_midi_events));
+                redlog::field("is_instrument", input_buses == 0));
 
   return true;
 }
@@ -267,19 +263,6 @@ void SDLAudioEngine::process_audio_block(float* output, int frames) {
   if (process_context) {
     util::update_process_context(*process_context,
                                  static_cast<int32_t>(frames));
-  }
-
-  // add MIDI events for instrument plugins (once per session)
-  if (context_->add_midi_events && !context_->midi_events_added) {
-    auto* event_list = plugin.get_event_list(BusDirection::Input, 0);
-    if (event_list) {
-      auto event = util::create_note_on_event(
-          constants::MIDI_MIDDLE_C, constants::MIDI_DEFAULT_VELOCITY,
-          constants::MIDI_DEFAULT_CHANNEL,
-          constants::MIDI_NOTE_DURATION_SECONDS, context_->sample_rate);
-      event_list->addEvent(event);
-      context_->midi_events_added = true;
-    }
   }
 
   // process audio through VST3 plugin

@@ -62,6 +62,7 @@ set(COMMON_SOURCES
     src/util/string_utils.cpp
     src/util/audio_utils.cpp
     src/util/midi_utils.cpp
+    src/util/midi_file.cpp
     src/audio/audio_io.cpp
     src/audio/sdl_audio.cpp
     src/commands/command.cpp
