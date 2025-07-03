@@ -1,6 +1,6 @@
 #include "scan_command.hpp"
 #include "../util/vst_discovery.hpp"
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 extern redlog::logger log_main;
 extern void apply_verbosity();

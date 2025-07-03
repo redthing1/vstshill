@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "ext/args.hpp"
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 #include "commands/command.hpp"
 #include "host/constants.hpp"

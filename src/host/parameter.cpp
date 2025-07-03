@@ -2,7 +2,7 @@
 #include "vstk.hpp"
 #include <algorithm>
 #include <public.sdk/source/vst/utility/stringconvert.h>
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 #include <sstream>
 
 namespace vstk {

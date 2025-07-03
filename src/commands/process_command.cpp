@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 extern redlog::logger log_main;
 extern void apply_verbosity();

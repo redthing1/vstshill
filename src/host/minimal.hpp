@@ -1,6 +1,6 @@
 #pragma once
 
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 #include <string>
 
 namespace vstk {

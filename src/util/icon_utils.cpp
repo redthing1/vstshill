@@ -1,5 +1,5 @@
 #include "icon_utils.hpp"
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 // include the generated icon data
 #include "../../assets/icons/vstshill_base_icon.h"

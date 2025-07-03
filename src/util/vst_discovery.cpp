@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cctype>
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 #ifdef _WIN32
 #include <windows.h>

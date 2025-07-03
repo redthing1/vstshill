@@ -4,7 +4,7 @@
 #include "../host/vstk.hpp"
 #include "../util/vst_discovery.hpp"
 #include "../util/string_utils.hpp"
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 #ifdef _WIN32
 #include <windows.h>

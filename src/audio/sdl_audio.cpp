@@ -4,7 +4,7 @@
 #include "../util/midi_utils.hpp"
 #include <algorithm>
 #include <cstring>
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 namespace vstk {
 

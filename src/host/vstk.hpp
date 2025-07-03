@@ -10,7 +10,7 @@
 // third-party includes
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_system.h>
-#include <redlog/redlog.hpp>
+#include <redlog.hpp>
 
 // vst3 sdk includes
 #include <pluginterfaces/gui/iplugview.h>
