@@ -33,8 +33,6 @@ int main(int argc, char* argv[]) {
   args::ArgumentParser parser("vstshill - cross-platform vst3 host",
                               "analyze, host, and process vst3 plugins");
   parser.helpParams.showTerminator = false;
-  parser.SetArgumentSeparations(false, false, true, true);
-  parser.LongSeparator(" ");
 
   args::GlobalOptions globals(parser, arguments);
   args::Group commands(parser, "commands");
