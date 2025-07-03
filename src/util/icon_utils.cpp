@@ -57,6 +57,9 @@ bool load_icon_from_data(SDL_Window* window, const unsigned char* data,
   if (icon_surface) {
     SDL_CloseIO(rw); // close iostream after successful load
     log.trc("loaded icon using sdl_image");
+  } else {
+    log.warn("IMG_Load_IO failed for single icon",
+             redlog::field("error", SDL_GetError()));
   }
 #endif
 
@@ -121,6 +124,9 @@ bool load_multi_resolution_icon(SDL_Window* window,
   if (base_icon) {
     SDL_CloseIO(base_rw); // Close it manually after successful load
     log.trc("loaded base icon using sdl_image");
+  } else {
+    log.warn("IMG_Load_IO failed for base icon",
+             redlog::field("error", SDL_GetError()));
   }
 #endif
 
@@ -150,6 +156,9 @@ bool load_multi_resolution_icon(SDL_Window* window,
       if (hires_icon) {
         SDL_CloseIO(hires_rw); // Close it manually after successful load
         log.trc("loaded high-res icon using sdl_image");
+      } else {
+        log.warn("IMG_Load_IO failed for hires icon",
+                 redlog::field("error", SDL_GetError()));
       }
 #endif
 
