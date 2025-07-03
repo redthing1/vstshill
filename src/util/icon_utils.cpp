@@ -117,8 +117,9 @@ bool load_multi_resolution_icon(SDL_Window* window,
 
   SDL_Surface* base_icon = nullptr;
 #ifdef HAVE_SDL_IMAGE
-  base_icon = IMG_Load_IO(base_rw, true);
+  base_icon = IMG_Load_IO(base_rw, false); // Don't close the stream yet
   if (base_icon) {
+    SDL_CloseIO(base_rw); // Close it manually after successful load
     log.trc("loaded base icon using sdl_image");
   }
 #endif
@@ -126,7 +127,7 @@ bool load_multi_resolution_icon(SDL_Window* window,
   if (!base_icon) {
     // fallback to bmp loader
     SDL_SeekIO(base_rw, 0, SDL_IO_SEEK_SET);
-    base_icon = SDL_LoadBMP_IO(base_rw, true);
+    base_icon = SDL_LoadBMP_IO(base_rw, true); // Now close it
     if (base_icon) {
       log.trc("loaded base icon using sdl bmp loader (fallback)");
     }
@@ -145,15 +146,16 @@ bool load_multi_resolution_icon(SDL_Window* window,
         SDL_IOFromConstMem(hires_data, static_cast<size_t>(hires_size));
     if (hires_rw) {
 #ifdef HAVE_SDL_IMAGE
-      hires_icon = IMG_Load_IO(hires_rw, true);
+      hires_icon = IMG_Load_IO(hires_rw, false); // Don't close the stream yet
       if (hires_icon) {
+        SDL_CloseIO(hires_rw); // Close it manually after successful load
         log.trc("loaded high-res icon using sdl_image");
       }
 #endif
 
       if (!hires_icon) {
         SDL_SeekIO(hires_rw, 0, SDL_IO_SEEK_SET);
-        hires_icon = SDL_LoadBMP_IO(hires_rw, true);
+        hires_icon = SDL_LoadBMP_IO(hires_rw, true); // Now close it
         if (hires_icon) {
           log.trc("loaded high-res icon using sdl bmp loader (fallback)");
         }
@@ -166,9 +168,11 @@ bool load_multi_resolution_icon(SDL_Window* window,
     if (!SDL_AddSurfaceAlternateImage(base_icon, hires_icon)) {
       log.warn("failed to add high-res icon as alternate image",
                redlog::field("error", SDL_GetError()));
+      // Only free the hires_icon if SDL_AddSurfaceAlternateImage failed
       SDL_DestroySurface(hires_icon);
     } else {
       log.trc("added high-res icon as alternate image");
+      // SDL now owns hires_icon, don't free it manually
     }
   }
 
