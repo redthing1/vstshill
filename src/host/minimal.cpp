@@ -1,4 +1,6 @@
 #include "minimal.hpp"
+#include "public.sdk/source/vst/hosting/plugprovider.h"
+#include "public.sdk/source/vst/utility/stringconvert.h"
 #include "../util/string_utils.hpp"
 #include <algorithm>
 
@@ -8,7 +10,7 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/vsttypes.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
-#include "public.sdk/source/vst/hosting/module.h"
+#include "module_loader.hpp"
 #include "public.sdk/source/vst/utility/stringconvert.h"
 
 using namespace Steinberg;
@@ -72,7 +74,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path,
   _log.inf("loading vst3 plugin", redlog::field("path", plugin_path));
 
   std::string error_description;
-  auto module = VST3::Hosting::Module::create(plugin_path, error_description);
+  auto module = host::VstModule::load(plugin_path, error_description);
   if (!module) {
     _log.error("failed to load module", redlog::field("path", plugin_path),
                redlog::field("error", error_description));
@@ -80,8 +82,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path,
   }
 
   _log.dbg("module loaded successfully",
-           redlog::field("module_path", module->getPath()),
-           redlog::field("module_name", module->getName()));
+           redlog::field("module_path", module->getPath()));
 
   // pause for debugging if requested
   if (pause_after_load) {
@@ -91,7 +92,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path,
   }
 
   // get plugin factory
-  auto factory = module->getFactory();
+  VST3::Hosting::PluginFactory factory(module->getFactory());
   auto factory_info = factory.info();
 
   _log.trc("factory information",

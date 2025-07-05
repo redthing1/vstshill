@@ -21,7 +21,7 @@
 #include <pluginterfaces/vst/ivstprocesscontext.h>
 #include <public.sdk/source/vst/hosting/eventlist.h>
 #include <public.sdk/source/vst/hosting/hostclasses.h>
-#include <public.sdk/source/vst/hosting/module.h>
+#include "module_loader.hpp"
 #include <public.sdk/source/vst/hosting/parameterchanges.h>
 #include <public.sdk/source/vst/hosting/plugprovider.h>
 #include <public.sdk/source/vst/hosting/processdata.h>
@@ -236,7 +236,7 @@ private:
   PluginInfo _info;
 
   // vst3 objects
-  VST3::Hosting::Module::Ptr _module;
+  std::unique_ptr<host::VstModule> _module;
   Steinberg::IPtr<Steinberg::Vst::PlugProvider> _plugin_provider;
   Steinberg::IPtr<Steinberg::Vst::IComponent> _component;
   Steinberg::IPtr<Steinberg::Vst::IAudioProcessor> _audio_processor;

@@ -4,6 +4,7 @@ set(COMMON_SOURCES
     src/host/vstk.cpp
     src/host/parameter.cpp
     src/host/minimal.cpp
+    src/host/module_loader.cpp
     src/util/vst_discovery.cpp
     src/util/icon_utils.cpp
     src/automation/automation.cpp
@@ -25,17 +26,17 @@ set(COMMON_SOURCES
 set(PLATFORM_SOURCES)
 if(APPLE)
     list(APPEND PLATFORM_SOURCES
-        lib/vst3sdk/public.sdk/source/vst/hosting/module_mac.mm
+        
         src/platform/macos_platform.mm
     )
 elseif(WIN32)
     list(APPEND PLATFORM_SOURCES
-        lib/vst3sdk/public.sdk/source/vst/hosting/module_win32.cpp
+        
         src/platform/windows_platform.cpp
     )
 elseif(UNIX)
     list(APPEND PLATFORM_SOURCES
-        lib/vst3sdk/public.sdk/source/vst/hosting/module_linux.cpp
+        
         src/platform/linux_platform.cpp
     )
 endif()

@@ -3,6 +3,7 @@ claude/
 CLAUDE*
 
 build-*/
+temp/
 
 .vscode/
 

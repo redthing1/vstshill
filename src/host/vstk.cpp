@@ -10,6 +10,7 @@
 #include <filesystem>
 
 #include <pluginterfaces/gui/iplugviewcontentscalesupport.h>
+#include "module_loader.hpp"
 #include <public.sdk/source/vst/utility/stringconvert.h>
 
 using namespace Steinberg;
@@ -81,7 +82,7 @@ Result<bool> Plugin::load(const std::string& plugin_path,
 
   // load module
   std::string error_description;
-  _module = VST3::Hosting::Module::create(plugin_path, error_description);
+  _module = host::VstModule::load(plugin_path, error_description);
   if (!_module) {
     _log.error("failed to load vst3 module", redlog::field("path", plugin_path),
                redlog::field("error", error_description));
@@ -91,7 +92,7 @@ Result<bool> Plugin::load(const std::string& plugin_path,
   _log.dbg("module loaded", redlog::field("path", _module->getPath()));
 
   // get factory and find audio effect
-  auto factory = _module->getFactory();
+  VST3::Hosting::PluginFactory factory(_module->getFactory());
   auto factory_info = factory.info();
 
   _log.trc("factory information",
@@ -725,7 +726,7 @@ void Plugin::reset_state() {
   _audio_processor = nullptr;
   _component = nullptr;
   _plugin_provider = nullptr;
-  _module = nullptr;
+  _module.reset();
 
   _input_arrangements.clear();
   _output_arrangements.clear();
