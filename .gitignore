@@ -5,6 +5,11 @@ CLAUDE*
 build-*/
 temp/
 
+*.cov
+*.drcov
+*.json
+*.jsonl
+
 .vscode/
 
 /*.wav
