@@ -12,6 +12,9 @@ endif()
 
 # optional sanitizers
 option(VSTSHILL_SANITIZERS "enable address and undefined behavior sanitizers" OFF)
+
+# optional witness integration
+option(VSTSHILL_WITNESS "enable w1tn3ss dynamic binary tracing and instrumentation framework" OFF)
 if(VSTSHILL_SANITIZERS AND NOT MSVC)
     add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
     add_link_options(-fsanitize=address,undefined)

@@ -11,6 +11,17 @@ add_subdirectory(lib/libsndfile)
 # find SDL3
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules/FindSDL3.cmake)
 
+# conditionally add w1tn3ss
+if(VSTSHILL_WITNESS)
+    set(WITNESS_SCRIPT ON CACHE BOOL "Enable witness script support" FORCE)
+    set(WITNESS_BUILD_STATIC ON CACHE BOOL "Build static libraries" FORCE)
+    set(WITNESS_BUILD_SHARED OFF CACHE BOOL "Build shared libraries" FORCE)
+    set(WITNESS_QBDI_EXTRAS OFF CACHE BOOL "Build QBDI extras" FORCE)
+    set(BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
+    
+    add_subdirectory(lib/w1tn3ss)
+endif()
+
 # dependency helper function
 function(apply_vstshill_dependencies target_name)
     target_include_directories(${target_name} PRIVATE
@@ -36,6 +47,16 @@ function(apply_vstshill_dependencies target_name)
         redlog::redlog
         sndfile
     )
+    
+    # link w1tn3ss libraries if enabled
+    if(VSTSHILL_WITNESS)
+        target_link_libraries(${target_name} PRIVATE
+            w1tn3ss
+            w1cov_static
+            w1script_static
+        )
+        target_compile_definitions(${target_name} PRIVATE VSTSHILL_WITNESS=1)
+    endif()
     
     # link SDL3 - prefer target over variables
     if(TARGET SDL3::SDL3)

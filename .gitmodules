@@ -16,3 +16,6 @@
 [submodule "lib/libsndfile"]
 	path = lib/libsndfile
 	url = https://github.com/libsndfile/libsndfile.git
+[submodule "lib/w1tn3ss"]
+	path = lib/w1tn3ss
+	url = https://github.com/redthing1/w1tn3ss
