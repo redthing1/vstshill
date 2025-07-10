@@ -283,7 +283,7 @@ void InstrumentableHost::inspect_with_coverage(const std::string& plugin_path,
   }
 
   // add the module to instrumentation range using the function pointer
-  if (!coverage.add_instrumented_module(func_ptr)) {
+  if (!coverage.add_instrumented_module_from_addr(func_ptr)) {
     _log.err("failed to add module to instrumentation range");
     return;
   }
