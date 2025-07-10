@@ -53,6 +53,7 @@ function(apply_vstshill_dependencies target_name)
         target_link_libraries(${target_name} PRIVATE
             w1tn3ss
             w1cov_static
+            w1xfer_static
             w1script_static
         )
         target_compile_definitions(${target_name} PRIVATE VSTSHILL_WITNESS=1)

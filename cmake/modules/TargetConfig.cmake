@@ -27,7 +27,8 @@ set(COMMON_SOURCES
 if(VSTSHILL_WITNESS)
     list(APPEND COMMON_SOURCES
         src/commands/instrument_command.cpp
-        src/instrumentation/instrumentable_host.cpp
+        src/instrumentation/tracer_host.cpp
+        src/instrumentation/vst_operations.cpp
     )
 endif()
 

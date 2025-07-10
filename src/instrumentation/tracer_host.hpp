@@ -1,0 +1,78 @@
+#pragma once
+#include <redlog.hpp>
+#include <memory>
+#include <variant>
+#include <tracers/w1cov/session.hpp>
+#include <tracers/w1xfer/session.hpp>
+#ifdef WITNESS_SCRIPT_ENABLED
+#include <tracers/w1script/session.hpp>
+#endif
+
+namespace vstk::instrumentation {
+
+// unified tracer host that handles all tracer types
+class TracerHost {
+public:
+  explicit TracerHost(const redlog::logger& logger) : _log(logger) {}
+
+  // single entry point for all tracers
+  template <typename TSession>
+  void inspect(const std::string& plugin_path,
+               const typename TSession::config_type& config,
+               bool pause_after_load = false) {
+
+    _log.inf("starting instrumented inspection",
+             redlog::field("plugin", plugin_path),
+             redlog::field("tracer", tracer_name<TSession>()));
+
+    // initialize tracer
+    TSession session(config);
+
+    if (!session.initialize()) {
+      _log.err("failed to initialize tracer session");
+      return;
+    }
+
+    // execute instrumented inspection
+    execute_inspection(session, plugin_path, pause_after_load);
+
+    // handle tracer-specific finalization
+    finalize(session, config);
+  }
+
+private:
+  redlog::logger _log;
+
+  // common inspection logic for all tracers
+  template <typename TSession>
+  void execute_inspection(TSession& session, const std::string& plugin_path,
+                          bool pause_after_load);
+
+  // tracer-specific finalization via overloading
+  void finalize(w1cov::session& session, const w1cov::coverage_config& config);
+  void finalize(w1xfer::session& session,
+                const w1xfer::transfer_config& config);
+#ifdef WITNESS_SCRIPT_ENABLED
+  void finalize(w1::tracers::script::session& session,
+                const w1::tracers::script::config& config);
+#endif
+
+  // helper to get tracer name
+  template <typename TSession> static constexpr const char* tracer_name() {
+    if constexpr (std::is_same_v<TSession, w1cov::session>) {
+      return "w1cov";
+    } else if constexpr (std::is_same_v<TSession, w1xfer::session>) {
+      return "w1xfer";
+    }
+#ifdef WITNESS_SCRIPT_ENABLED
+    else if constexpr (std::is_same_v<TSession, w1::tracers::script::session>) {
+      return "w1script";
+    }
+#endif
+    else {
+      return "unknown";
+    }
+  }
+};
+
+} // namespace vstk::instrumentation

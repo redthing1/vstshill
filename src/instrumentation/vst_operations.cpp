@@ -1,5 +1,4 @@
-#include "instrumentable_host.hpp"
-#include "../host/module_loader.hpp"
+#include "vst_operations.hpp"
 #include "../util/string_utils.hpp"
 #include "public.sdk/source/vst/hosting/plugprovider.h"
 #include "public.sdk/source/vst/utility/stringconvert.h"
@@ -8,21 +7,22 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/vsttypes.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
+#include <redlog.hpp>
 
 using namespace Steinberg;
 
-namespace vstk {
-namespace instrumentation {
+namespace vstk::instrumentation {
 
 namespace {
-// minimal vst3 host application implementation - provides context for plugins
+
+// minimal vst3 host application implementation
 class MinimalHostApplication : public Vst::IHostApplication {
 public:
   MinimalHostApplication() = default;
   virtual ~MinimalHostApplication() = default;
 
   tresult PLUGIN_API getName(Vst::String128 name) override {
-    return Vst::StringConvert::convert("vstshill instrumentation host", name)
+    return Vst::StringConvert::convert("vstshill tracer host", name)
                ? kResultTrue
                : kInternalError;
   }
@@ -53,35 +53,43 @@ public:
 IMPLEMENT_FUNKNOWN_METHODS(MinimalHostApplication, Vst::IHostApplication,
                            Vst::IHostApplication::iid)
 
-// global host context for instrumentation host
-FUnknown* get_instrumentation_host_context() {
+// global host context
+FUnknown* get_host_context() {
   static MinimalHostApplication host_app;
   return &host_app;
 }
 
 } // namespace
 
-InstrumentableHost::InstrumentableHost(const redlog::logger& logger)
-    : _log(logger) {
-  _log.trc("instrumentable host instance created");
+// initializes vst module from library handle
+extern "C" uint64_t vst_init_module(uint64_t library_handle,
+                                    uint64_t plugin_path_ptr) {
+  void* handle = reinterpret_cast<void*>(library_handle);
+  const std::string* path =
+      reinterpret_cast<const std::string*>(plugin_path_ptr);
+
+  std::string error_description;
+  auto module =
+      host::VstModule::initializeFromLibrary(handle, *path, error_description);
+
+  if (!module) {
+    return 0; // failure
+  }
+
+  // return the module pointer as success indicator
+  // note: we leak the module here, but it's ok for instrumentation purposes
+  return reinterpret_cast<uint64_t>(module.release());
 }
 
-// helper struct for passing inspection context
-struct InspectionContext {
-  InstrumentableHost* host;
-  host::VstModule* module;
-};
+// performs full vst inspection
+extern "C" uint64_t vst_inspect_plugin(uint64_t context_ptr) {
+  auto* ctx = reinterpret_cast<VstContext*>(context_ptr);
+  auto log = redlog::get_logger("vstk::vst_operations");
 
-// c-style function that performs the actual vst inspection under
-// instrumentation
-extern "C" uint64_t perform_instrumented_inspection(uint64_t context_ptr) {
-  auto* ctx = reinterpret_cast<InspectionContext*>(context_ptr);
-  auto& log = ctx->host->_log;
-
-  log.dbg("starting instrumented vst inspection");
+  log.dbg("starting vst inspection");
 
   if (!ctx->module) {
-    log.err("null module pointer in inspection context");
+    log.err("null module pointer in context");
     return 1;
   }
 
@@ -105,7 +113,7 @@ extern "C" uint64_t perform_instrumented_inspection(uint64_t context_ptr) {
               redlog::field("vendor", class_info.vendor()),
               redlog::field("version", class_info.version()));
 
-      // create component - under instrumentation
+      // create component
       log.dbg("creating component");
       auto component = factory.createInstance<Vst::IComponent>(class_info.ID());
       if (!component) {
@@ -113,9 +121,8 @@ extern "C" uint64_t perform_instrumented_inspection(uint64_t context_ptr) {
         continue;
       }
 
-      // initialize component - under instrumentation
-      tresult result =
-          component->initialize(get_instrumentation_host_context());
+      // initialize component
+      tresult result = component->initialize(get_host_context());
       if (result != kResultOk) {
         log.err("failed to initialize component",
                 redlog::field("result", result));
@@ -168,8 +175,7 @@ extern "C" uint64_t perform_instrumented_inspection(uint64_t context_ptr) {
         auto controller =
             factory.createInstance<Vst::IEditController>(controller_cid);
         if (controller) {
-          if (controller->initialize(get_instrumentation_host_context()) ==
-              kResultOk) {
+          if (controller->initialize(get_host_context()) == kResultOk) {
             log.dbg("edit controller initialized successfully");
 
             // get parameter count
@@ -219,122 +225,4 @@ extern "C" uint64_t perform_instrumented_inspection(uint64_t context_ptr) {
   return 0;
 }
 
-// helper to set library handle in context for trace_function
-extern "C" uint64_t perform_instrumented_vst_init(uint64_t library_handle,
-                                                  uint64_t plugin_path_ptr) {
-  void* handle = reinterpret_cast<void*>(library_handle);
-  const std::string* path =
-      reinterpret_cast<const std::string*>(plugin_path_ptr);
-
-  std::string error_description;
-  auto module =
-      host::VstModule::initializeFromLibrary(handle, *path, error_description);
-
-  if (!module) {
-    return 0; // failure
-  }
-
-  // return the module pointer as success indicator
-  // note: we leak the module here, but it's ok for instrumentation purposes
-  return reinterpret_cast<uint64_t>(module.release());
-}
-
-void InstrumentableHost::inspect_with_coverage(const std::string& plugin_path,
-                                               bool pause_after_load,
-                                               const std::string& export_path) {
-  _log.inf("starting coverage instrumentation for plugin",
-           redlog::field("path", plugin_path));
-
-  // create coverage session
-  w1cov::session coverage;
-  if (!coverage.initialize()) {
-    _log.err("failed to initialize coverage session");
-    return;
-  }
-
-  // step 1: load the library WITHOUT instrumentation
-  _log.dbg("loading plugin library (outside instrumentation)");
-
-  std::string error_description;
-  void* library_handle =
-      host::VstModule::loadLibraryOnly(plugin_path, error_description);
-  if (!library_handle) {
-    _log.err("failed to load library",
-             redlog::field("error", error_description));
-    return;
-  }
-
-  _log.dbg("library loaded successfully");
-
-  // pause immediately after load if requested (before any plugin code runs)
-  if (pause_after_load) {
-    _log.inf("pausing after library load (before plugin initialization)");
-    wait_for_input("library loaded. press enter to continue with plugin "
-                   "initialization...");
-  }
-
-  // step 2: get a function pointer from the module to add it to instrumentation
-  void* func_ptr =
-      host::VstModule::getFunctionPointer(library_handle, "GetPluginFactory");
-  if (!func_ptr) {
-    _log.err("failed to get function pointer from module");
-    host::VstModule::unloadLibrary(library_handle);
-    return;
-  }
-
-  // add the module to instrumentation range using the function pointer
-  if (!coverage.add_instrumented_module_from_addr(func_ptr)) {
-    _log.err("failed to add module to instrumentation range");
-    return;
-  }
-
-  _log.inf("module added to instrumentation range");
-
-  // step 3: initialize vst module under instrumentation
-  uint64_t module_ptr;
-  bool success = coverage.trace_function(
-      reinterpret_cast<void*>(&perform_instrumented_vst_init),
-      {reinterpret_cast<uint64_t>(library_handle),
-       reinterpret_cast<uint64_t>(&plugin_path)},
-      &module_ptr);
-
-  if (!success || !module_ptr) {
-    _log.err("failed to initialize vst module under instrumentation");
-    host::VstModule::unloadLibrary(library_handle);
-    return;
-  }
-
-  // wrap the module pointer
-  std::unique_ptr<host::VstModule> module(
-      reinterpret_cast<host::VstModule*>(module_ptr));
-
-  // step 4: perform inspection under instrumentation
-  InspectionContext ctx{this, module.get()};
-  uint64_t result;
-
-  success = coverage.trace_function(
-      reinterpret_cast<void*>(&perform_instrumented_inspection),
-      {reinterpret_cast<uint64_t>(&ctx)}, &result);
-
-  if (!success || result != 0) {
-    _log.err("instrumented inspection failed");
-  }
-
-  // print statistics
-  _log.inf("coverage statistics:");
-  coverage.print_statistics();
-
-  // export if requested
-  if (!export_path.empty()) {
-    if (!coverage.export_coverage(export_path)) {
-      _log.err("failed to export coverage data");
-    } else {
-      _log.inf("exported coverage data", redlog::field("path", export_path));
-    }
-  }
-
-  _log.dbg("cleanup complete");
-}
-
-} // namespace instrumentation
-} // namespace vstk
+} // namespace vstk::instrumentation

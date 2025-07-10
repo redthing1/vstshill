@@ -21,14 +21,26 @@ private:
   args::Positional<std::string> plugin_path_;
   args::Flag pause_flag_;
 
-  // instrumentation options
-  args::Flag coverage_flag_;
-  args::ValueFlag<std::string> export_path_;
+  // tracer selection
+  args::ValueFlag<std::string> tracer_type_;
 
-  // future: script, trace, etc.
+  // coverage options
+  args::ValueFlag<std::string> coverage_out_;
 
-  // implementation methods
-  int execute_with_coverage(const std::string& plugin_path);
+  // transfer options
+  args::ValueFlag<std::string> transfers_out_;
+  args::Flag no_registers_;
+  args::Flag no_stack_info_;
+  args::Flag analyze_apis_;
+
+  // script options
+  args::ValueFlag<std::string> script_path_;
+  args::ValueFlagList<std::string> script_config_;
+
+  // execution methods
+  int execute_coverage(const std::string& plugin_path);
+  int execute_transfer(const std::string& plugin_path);
+  int execute_script(const std::string& plugin_path);
 };
 
 } // namespace vstk
