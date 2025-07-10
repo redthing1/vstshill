@@ -6,6 +6,7 @@
 
 extern redlog::logger log_main;
 extern void apply_verbosity();
+extern args::CounterFlag verbosity_flag;
 
 namespace vstk {
 
@@ -86,6 +87,7 @@ int InstrumentCommand::execute_transfer(const std::string& plugin_path) {
   config.log_registers = !no_registers_;
   config.log_stack_info = !no_stack_info_;
   config.analyze_apis = analyze_apis_;
+  config.verbose = args::get(verbosity_flag);
 
   host.inspect<w1xfer::session>(plugin_path, config, pause_flag_);
   return 0;
