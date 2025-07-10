@@ -26,6 +26,8 @@ void apply_verbosity() {
     redlog::set_level(redlog::level::trace);
   } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_DEBUG) {
     redlog::set_level(redlog::level::debug);
+  } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_PEDANTIC) {
+    redlog::set_level(redlog::level::pedantic);
   }
 }
 

@@ -36,5 +36,6 @@ constexpr int STEREO_CHANNELS = 2;
 constexpr int VERBOSITY_LEVEL_VERBOSE = 1;
 constexpr int VERBOSITY_LEVEL_TRACE = 2; 
 constexpr int VERBOSITY_LEVEL_DEBUG = 3;
+constexpr int VERBOSITY_LEVEL_PEDANTIC = 4;
 
 } // namespace vstk::constants
