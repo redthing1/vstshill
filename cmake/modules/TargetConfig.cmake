@@ -23,6 +23,14 @@ set(COMMON_SOURCES
     lib/vst3sdk/public.sdk/source/vst/hosting/plugprovider.cpp
 )
 
+# conditionally add witness-specific sources
+if(VSTSHILL_WITNESS)
+    list(APPEND COMMON_SOURCES
+        src/commands/instrument_command.cpp
+        src/instrumentation/instrumentable_host.cpp
+    )
+endif()
+
 set(PLATFORM_SOURCES)
 if(APPLE)
     list(APPEND PLATFORM_SOURCES

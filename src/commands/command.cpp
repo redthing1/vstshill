@@ -4,6 +4,9 @@
 #include "parameters_command.hpp"
 #include "process_command.hpp"
 #include "scan_command.hpp"
+#ifdef VSTSHILL_WITNESS
+#include "instrument_command.hpp"
+#endif
 
 namespace vstk {
 
@@ -31,5 +34,17 @@ void cmd_process(args::Subparser& parser) {
   ProcessCommand command(parser);
   command.execute();
 }
+
+#ifdef VSTSHILL_WITNESS
+void cmd_instrument(args::Subparser& parser) {
+  InstrumentCommand command(parser);
+  command.execute();
+}
+#else
+void cmd_instrument(args::Subparser& parser) {
+  // stub for when witness is not enabled
+  (void)parser;
+}
+#endif
 
 } // namespace vstk

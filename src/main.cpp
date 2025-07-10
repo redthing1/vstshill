@@ -52,6 +52,12 @@ int main(int argc, char* argv[]) {
   args::Command parameters_cmd(commands, "parameters",
                                "analyze and list plugin parameters",
                                &vstk::cmd_parameters);
+#ifdef VSTSHILL_WITNESS
+  args::Command instrument_cmd(
+      commands, "instrument",
+      "instrument vst3 plugin with dynamic analysis tools",
+      &vstk::cmd_instrument);
+#endif
 
   try {
     parser.ParseCLI(argc, argv);

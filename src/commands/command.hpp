@@ -30,5 +30,6 @@ void cmd_inspect(args::Subparser& parser);
 void cmd_parameters(args::Subparser& parser);
 void cmd_gui(args::Subparser& parser);
 void cmd_process(args::Subparser& parser);
+void cmd_instrument(args::Subparser& parser);
 
 } // namespace vstk
