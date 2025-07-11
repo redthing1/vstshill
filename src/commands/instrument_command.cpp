@@ -21,6 +21,9 @@ InstrumentCommand::InstrumentCommand(args::Subparser& parser)
       // coverage options
       coverage_out_(parser, "coverage-out", "coverage output file",
                     {"coverage-out"}),
+      coverage_inst_(parser, "coverage-inst",
+                     "enable instruction-level coverage tracing",
+                     {"coverage-inst"}),
 
       // transfer options
       transfers_out_(parser, "transfers-out", "transfers output file",
@@ -78,6 +81,7 @@ int InstrumentCommand::execute_coverage(const std::string& plugin_path) {
   if (coverage_out_) {
     config.output_file = args::get(coverage_out_);
   }
+  config.inst_trace = coverage_inst_;
 
   std::string filter = module_filter_ ? args::get(module_filter_) : "";
   host.inspect<w1cov::session>(plugin_path, config, pause_flag_, filter);

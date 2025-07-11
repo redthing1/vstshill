@@ -26,6 +26,7 @@ private:
 
   // coverage options
   args::ValueFlag<std::string> coverage_out_;
+  args::Flag coverage_inst_;
 
   // transfer options
   args::ValueFlag<std::string> transfers_out_;
