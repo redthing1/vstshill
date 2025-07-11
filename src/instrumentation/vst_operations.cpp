@@ -125,6 +125,11 @@ extern "C" uint64_t vst_inspect_plugin(uint64_t context_ptr) {
               redlog::field("vendor", class_info.vendor()),
               redlog::field("version", class_info.version()));
 
+      log.trc("plugin details",
+              redlog::field("sdk_version", class_info.sdkVersion()),
+              redlog::field("categories", class_info.subCategoriesString()),
+              redlog::field("class_id", class_info.ID().toString()));
+
       // create component
       log.dbg("creating component");
       auto component = factory.createInstance<Vst::IComponent>(class_info.ID());
@@ -187,6 +192,7 @@ extern "C" uint64_t vst_inspect_plugin(uint64_t context_ptr) {
         auto controller =
             factory.createInstance<Vst::IEditController>(controller_cid);
         if (controller) {
+          log.dbg("edit controller created successfully");
           if (controller->initialize(get_host_context()) == kResultOk) {
             log.dbg("edit controller initialized successfully");
 
@@ -225,6 +231,7 @@ extern "C" uint64_t vst_inspect_plugin(uint64_t context_ptr) {
       log.inf("plugin inspected successfully");
 
       // clean up
+      log.inf("terminating component");
       component->terminate();
       break; // only process first audio effect
     }
