@@ -19,7 +19,8 @@ public:
   template <typename TSession>
   void inspect(const std::string& plugin_path,
                const typename TSession::config_type& config,
-               bool pause_after_load = false) {
+               bool pause_after_load = false,
+               const std::string& module_filter = "") {
 
     _log.inf("starting instrumented inspection",
              redlog::field("plugin", plugin_path),
@@ -34,7 +35,7 @@ public:
     }
 
     // execute instrumented inspection
-    execute_inspection(session, plugin_path, pause_after_load);
+    execute_inspection(session, plugin_path, pause_after_load, module_filter);
 
     // handle tracer-specific finalization
     finalize(session, config);
@@ -46,7 +47,8 @@ private:
   // common inspection logic for all tracers
   template <typename TSession>
   void execute_inspection(TSession& session, const std::string& plugin_path,
-                          bool pause_after_load);
+                          bool pause_after_load,
+                          const std::string& module_filter = "");
 
   // tracer-specific finalization via overloading
   void finalize(w1cov::session& session, const w1cov::coverage_config& config);

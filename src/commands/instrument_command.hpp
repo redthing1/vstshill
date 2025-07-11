@@ -37,6 +37,9 @@ private:
   args::ValueFlag<std::string> script_path_;
   args::ValueFlagList<std::string> script_config_;
 
+  // module filtering
+  args::ValueFlag<std::string> module_filter_;
+
   // execution methods
   int execute_coverage(const std::string& plugin_path);
   int execute_transfer(const std::string& plugin_path);

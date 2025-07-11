@@ -34,7 +34,13 @@ InstrumentCommand::InstrumentCommand(args::Subparser& parser)
       // script options
       script_path_(parser, "script", "lua script path", {"script"}),
       script_config_(parser, "script-config", "script configuration key=value",
-                     {"script-config"}) {}
+                     {"script-config"}),
+
+      // module filtering
+      module_filter_(parser, "module-filter",
+                     "filter modules to instrument (substring match, or '$' "
+                     "for target module only)",
+                     {'f', "module-filter"}) {}
 
 int InstrumentCommand::execute() {
   apply_verbosity();
@@ -73,7 +79,8 @@ int InstrumentCommand::execute_coverage(const std::string& plugin_path) {
     config.output_file = args::get(coverage_out_);
   }
 
-  host.inspect<w1cov::session>(plugin_path, config, pause_flag_);
+  std::string filter = module_filter_ ? args::get(module_filter_) : "";
+  host.inspect<w1cov::session>(plugin_path, config, pause_flag_, filter);
   return 0;
 }
 
@@ -89,7 +96,8 @@ int InstrumentCommand::execute_transfer(const std::string& plugin_path) {
   config.analyze_apis = analyze_apis_;
   config.verbose = args::get(verbosity_flag);
 
-  host.inspect<w1xfer::session>(plugin_path, config, pause_flag_);
+  std::string filter = module_filter_ ? args::get(module_filter_) : "";
+  host.inspect<w1xfer::session>(plugin_path, config, pause_flag_, filter);
   return 0;
 }
 
@@ -113,7 +121,9 @@ int InstrumentCommand::execute_script(const std::string& plugin_path) {
     }
   }
 
-  host.inspect<w1::tracers::script::session>(plugin_path, config, pause_flag_);
+  std::string filter = module_filter_ ? args::get(module_filter_) : "";
+  host.inspect<w1::tracers::script::session>(plugin_path, config, pause_flag_,
+                                             filter);
   return 0;
 #else
   log_main.err("script tracer not available (lua support disabled)");
