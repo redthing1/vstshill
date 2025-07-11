@@ -120,10 +120,10 @@ apply_module_filtering(TSession& session, const std::string& filter_pattern,
 }
 
 template <typename TSession>
-void TracerHost::execute_inspection(TSession& session,
-                                    const std::string& plugin_path,
-                                    bool pause_after_load,
-                                    const std::string& module_filter) {
+void TracerHost::execute_inspection(
+    const std::string& plugin_path,
+    const typename TSession::config_type& config, bool pause_after_load,
+    const std::string& module_filter) {
   // step 1: load library outside instrumentation
   _log.dbg("loading plugin library");
   std::string error_desc;
@@ -140,7 +140,17 @@ void TracerHost::execute_inspection(TSession& session,
     wait_for_input("press enter to continue...");
   }
 
-  // step 2: add module to instrumentation
+  // step 2: initialize tracer session after VST is loaded
+  _log.dbg("initializing tracer session");
+  TSession session(config);
+
+  if (!session.initialize()) {
+    _log.err("failed to initialize tracer session");
+    host::VstModule::unloadLibrary(library_handle);
+    return;
+  }
+
+  // step 3: add module to instrumentation
   void* func_ptr =
       host::VstModule::getFunctionPointer(library_handle, "GetPluginFactory");
   if (!func_ptr) {
@@ -158,7 +168,7 @@ void TracerHost::execute_inspection(TSession& session,
   // apply module filtering if specified
   apply_module_filtering(session, module_filter, func_ptr, _log);
 
-  // step 3: initialize vst under instrumentation
+  // step 4: initialize vst under instrumentation
   uint64_t module_ptr;
   if (!session.trace_function(reinterpret_cast<void*>(&vst_init_module),
                               {reinterpret_cast<uint64_t>(library_handle),
@@ -170,17 +180,20 @@ void TracerHost::execute_inspection(TSession& session,
     return;
   }
 
-  // step 4: inspect vst under instrumentation
+  // step 5: inspect vst under instrumentation
   std::unique_ptr<host::VstModule> module(
       reinterpret_cast<host::VstModule*>(module_ptr));
   VstContext ctx{this, module.get(), &plugin_path};
 
   uint64_t result;
   if (!session.trace_function(reinterpret_cast<void*>(&vst_inspect_plugin),
-                              {reinterpret_cast<uint64_t>(&ctx)}, &result) ||
-      result != 0) {
-    _log.err("vst inspection failed");
+                              {reinterpret_cast<uint64_t>(&ctx)}, &result)) {
+    _log.err("failed to inspect vst plugin");
+    return;
   }
+
+  // handle tracer-specific finalization
+  finalize(session, config);
 }
 
 // finalization for coverage tracer
@@ -215,13 +228,17 @@ void TracerHost::finalize(w1::tracers::script::session& session,
 #endif
 
 // explicit instantiations
-template void TracerHost::execute_inspection<w1cov::session>(
-    w1cov::session&, const std::string&, bool, const std::string&);
-template void TracerHost::execute_inspection<w1xfer::session>(
-    w1xfer::session&, const std::string&, bool, const std::string&);
+template void
+TracerHost::execute_inspection<w1cov::session>(const std::string&,
+                                               const w1cov::coverage_config&,
+                                               bool, const std::string&);
+template void
+TracerHost::execute_inspection<w1xfer::session>(const std::string&,
+                                                const w1xfer::transfer_config&,
+                                                bool, const std::string&);
 #ifdef WITNESS_SCRIPT_ENABLED
 template void TracerHost::execute_inspection<w1::tracers::script::session>(
-    w1::tracers::script::session&, const std::string&, bool,
+    const std::string&, const w1::tracers::script::config&, bool,
     const std::string&);
 #endif
 

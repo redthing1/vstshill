@@ -26,27 +26,18 @@ public:
              redlog::field("plugin", plugin_path),
              redlog::field("tracer", tracer_name<TSession>()));
 
-    // initialize tracer
-    TSession session(config);
-
-    if (!session.initialize()) {
-      _log.err("failed to initialize tracer session");
-      return;
-    }
-
-    // execute instrumented inspection
-    execute_inspection(session, plugin_path, pause_after_load, module_filter);
-
-    // handle tracer-specific finalization
-    finalize(session, config);
+    // execute instrumented inspection (session will be initialized inside)
+    execute_inspection<TSession>(plugin_path, config, pause_after_load,
+                                 module_filter);
   }
 
 private:
   redlog::logger _log;
 
-  // common inspection logic for all tracers
+  // inspection logic with proper tracer initialization timing
   template <typename TSession>
-  void execute_inspection(TSession& session, const std::string& plugin_path,
+  void execute_inspection(const std::string& plugin_path,
+                          const typename TSession::config_type& config,
                           bool pause_after_load,
                           const std::string& module_filter = "");
 
