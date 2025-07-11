@@ -51,11 +51,23 @@ public:
     return kResultFalse;
   }
 
-  DECLARE_FUNKNOWN_METHODS
-};
+  tresult PLUGIN_API queryInterface(const TUID _iid, void** obj) override {
+    QUERY_INTERFACE(_iid, obj, FUnknown::iid, IHostApplication)
+    QUERY_INTERFACE(_iid, obj, IHostApplication::iid, IHostApplication)
+    *obj = nullptr;
+    return kNoInterface;
+  }
 
-IMPLEMENT_FUNKNOWN_METHODS(MinimalHostApplication, Vst::IHostApplication,
-                           Vst::IHostApplication::iid)
+  uint32 PLUGIN_API addRef() override {
+    // static object, don't track references
+    return 1;
+  }
+
+  uint32 PLUGIN_API release() override {
+    // static object, don't delete
+    return 1;
+  }
+};
 
 // global host context for minimal host
 FUnknown* get_minimal_host_context() {
