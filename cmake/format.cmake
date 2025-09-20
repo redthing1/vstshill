@@ -13,7 +13,11 @@ file(GLOB_RECURSE SOURCE_FILES
     "${CMAKE_CURRENT_LIST_DIR}/../src/*.mm"
 )
 
-message(STATUS "Formatting ${SOURCE_FILES}")
+# Exclude vendored headers that live under src/ext
+list(FILTER SOURCE_FILES EXCLUDE REGEX "/src/ext/")
+
+list(LENGTH SOURCE_FILES SOURCE_COUNT)
+message(STATUS "Formatting ${SOURCE_COUNT} files")
 
 # Format all files
 foreach(FILE ${SOURCE_FILES})

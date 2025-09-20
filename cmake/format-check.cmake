@@ -13,7 +13,10 @@ file(GLOB_RECURSE SOURCE_FILES
     "${CMAKE_CURRENT_LIST_DIR}/../src/*.mm"
 )
 
-message(STATUS "Checking formatting of ${CMAKE_LIST_LENGTH} files...")
+list(FILTER SOURCE_FILES EXCLUDE REGEX "/src/ext/")
+
+list(LENGTH SOURCE_FILES SOURCE_COUNT)
+message(STATUS "Checking formatting of ${SOURCE_COUNT} files...")
 
 # Check formatting of all files
 foreach(FILE ${SOURCE_FILES})

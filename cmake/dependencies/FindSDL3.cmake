@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # Option to control static linking
 option(VSTSHILL_STATIC_SDL "Link SDL3 statically" OFF)
 
@@ -65,4 +67,3 @@ if(VSTSHILL_STATIC_SDL)
 else()
     message(STATUS "SDL3 will be linked dynamically")
 endif()
-

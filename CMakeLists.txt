@@ -7,12 +7,19 @@ project(vstshill
 )
 
 # Add cmake modules to path
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+list(APPEND CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/options"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependencies"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/targets"
+)
 
 # Load configuration modules in order
-include(PlatformConfig)        # Platform detection and compiler settings
-include(DependencyConfig)      # Find and configure all dependencies  
-include(TargetConfig)          # Create and configure targets
+include(options/ProjectOptions)
+include(options/PlatformOptions)
+include(dependencies/Dependencies)
+include(targets/Core)
+include(targets/Executables)
 
 # Load platform-specific configuration
 if(APPLE)
