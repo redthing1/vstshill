@@ -85,8 +85,9 @@ void GuiCommand::open_plugin_gui(const std::string& plugin_path,
   // pause for debugging if requested
   if (pause_after_load) {
     log.inf("pausing after plugin load (before gui creation)");
-    util::wait_for_input("plugin loaded into memory. press enter to continue with "
-                   "gui creation...");
+    util::wait_for_input(
+        "plugin loaded into memory. press enter to continue with "
+        "gui creation...");
   }
 
   if (!plugin.has_editor()) {

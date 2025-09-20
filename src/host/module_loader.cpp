@@ -284,7 +284,8 @@ VstModule::initializeFromLibrary(void* libraryHandle,
   context.bundle_path = bundlePath;
   context.library_handle = libraryHandle;
 
-  auto signal_failure = [&](const std::string& message) -> std::unique_ptr<VstModule> {
+  auto signal_failure =
+      [&](const std::string& message) -> std::unique_ptr<VstModule> {
     context.error_description = message;
     context.stage = LoadingStage::LOAD_FAILED;
     call_instrumentation(context);

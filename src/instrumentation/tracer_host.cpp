@@ -84,10 +84,11 @@ static void restrict_to_target_module(TSession& session,
 
     if (session.get_vm()->addInstrumentedModuleFromAddr(map.range.start())) {
       instrumented_modules++;
-      log.dbg("instrumented module", redlog::field("name", map.name),
-              redlog::field("range_start", "0x%lx", map.range.start()),
-              redlog::field("range_end", "0x%lx", map.range.end()),
-              redlog::field("reason", is_target ? "target_module" : "critical"));
+      log.dbg(
+          "instrumented module", redlog::field("name", map.name),
+          redlog::field("range_start", "0x%lx", map.range.start()),
+          redlog::field("range_end", "0x%lx", map.range.end()),
+          redlog::field("reason", is_target ? "target_module" : "critical"));
     } else {
       log.warn("failed to instrument module", redlog::field("name", map.name));
     }
@@ -185,8 +186,7 @@ void TracerHost::execute_inspection(
   }
 
   if (result != 0) {
-    _log.err("inspection reported failure",
-             redlog::field("result", result));
+    _log.err("inspection reported failure", redlog::field("result", result));
     return;
   }
 

@@ -303,8 +303,9 @@ std::string to_lower(const std::string& str) {
   return result;
 }
 
-std::vector<PluginInfo> find_exact_matches(const std::vector<PluginInfo>& plugins,
-                                           const std::string& input_lower) {
+std::vector<PluginInfo>
+find_exact_matches(const std::vector<PluginInfo>& plugins,
+                   const std::string& input_lower) {
   std::vector<PluginInfo> matches;
   for (const auto& plugin : plugins) {
     if (to_lower(plugin.name) == input_lower) {
@@ -314,8 +315,9 @@ std::vector<PluginInfo> find_exact_matches(const std::vector<PluginInfo>& plugin
   return matches;
 }
 
-std::vector<PluginInfo> find_partial_matches(const std::vector<PluginInfo>& plugins,
-                                             const std::string& input_lower) {
+std::vector<PluginInfo>
+find_partial_matches(const std::vector<PluginInfo>& plugins,
+                     const std::string& input_lower) {
   std::vector<PluginInfo> matches;
   for (const auto& plugin : plugins) {
     if (to_lower(plugin.name).find(input_lower) != std::string::npos) {
@@ -327,14 +329,12 @@ std::vector<PluginInfo> find_partial_matches(const std::vector<PluginInfo>& plug
 
 void log_multiple_matches(const std::vector<PluginInfo>& matches,
                           const std::string& input) {
-  log_main.err("multiple plugins found matching", 
-               redlog::field("name", input),
+  log_main.err("multiple plugins found matching", redlog::field("name", input),
                redlog::field("count", matches.size()));
-  
+
   log_main.inf("available matches:");
   for (const auto& match : matches) {
-    log_main.inf("  plugin", 
-                 redlog::field("name", match.name),
+    log_main.inf("  plugin", redlog::field("name", match.name),
                  redlog::field("path", match.path));
   }
 }
@@ -343,39 +343,38 @@ void log_multiple_matches(const std::vector<PluginInfo>& matches,
 
 std::string resolve_plugin_path(const std::string& input) {
   log_main.dbg("resolving plugin path", redlog::field("input", input));
-  
+
   // try as direct path first
   std::error_code ec;
   if (std::filesystem::exists(input, ec) && !ec) {
     log_main.dbg("input is valid path", redlog::field("path", input));
     return input;
   }
-  
+
   // search for matching plugin by name
   log_main.dbg("input not a valid path, searching by name");
   auto plugins = discover_vst3_plugins();
   auto input_lower = to_lower(input);
-  
+
   // try exact match first
   auto matches = find_exact_matches(plugins, input_lower);
-  
+
   // fallback to partial match
   if (matches.empty()) {
     matches = find_partial_matches(plugins, input_lower);
   }
-  
+
   if (matches.empty()) {
     log_main.err("no plugins found matching", redlog::field("name", input));
     return "";
   }
-  
+
   if (matches.size() == 1) {
-    log_main.inf("resolved plugin", 
-                 redlog::field("name", input),
+    log_main.inf("resolved plugin", redlog::field("name", input),
                  redlog::field("path", matches[0].path));
     return matches[0].path;
   }
-  
+
   log_multiple_matches(matches, input);
   return "";
 }

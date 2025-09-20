@@ -76,15 +76,13 @@ int InstrumentCommand::execute() {
   const std::string tracer_type = args::get(tracer_type_);
 
   const std::unordered_map<std::string, std::function<int(const std::string&)>>
-      dispatch{{"w1cov", [this](const std::string& path) {
-                   return execute_coverage(path);
-                 }},
-                {"w1xfer", [this](const std::string& path) {
-                   return execute_transfer(path);
-                 }},
-                {"w1script", [this](const std::string& path) {
-                   return execute_script(path);
-                 }}};
+      dispatch{
+          {"w1cov",
+           [this](const std::string& path) { return execute_coverage(path); }},
+          {"w1xfer",
+           [this](const std::string& path) { return execute_transfer(path); }},
+          {"w1script",
+           [this](const std::string& path) { return execute_script(path); }}};
 
   auto it = dispatch.find(tracer_type);
   if (it == dispatch.end()) {

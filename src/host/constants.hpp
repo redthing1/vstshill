@@ -8,7 +8,7 @@ constexpr int DEFAULT_BLOCK_SIZE = 512;
 constexpr int DEFAULT_BIT_DEPTH = 32;
 constexpr int DEFAULT_OUTPUT_CHANNELS = 2;
 
-// instrument mode defaults  
+// instrument mode defaults
 constexpr double DEFAULT_INSTRUMENT_DURATION_SECONDS = 10.0;
 
 // midi event constants
@@ -34,7 +34,7 @@ constexpr int STEREO_CHANNELS = 2;
 
 // verbosity level constants
 constexpr int VERBOSITY_LEVEL_VERBOSE = 1;
-constexpr int VERBOSITY_LEVEL_TRACE = 2; 
+constexpr int VERBOSITY_LEVEL_TRACE = 2;
 constexpr int VERBOSITY_LEVEL_DEBUG = 3;
 constexpr int VERBOSITY_LEVEL_PEDANTIC = 4;
 
