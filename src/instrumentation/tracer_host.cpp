@@ -105,7 +105,7 @@ void TracerHost::execute_inspection(
     const std::string& module_filter) {
   auto session_config = config;
 
-  auto trimmed_filter = vstk::trim(module_filter);
+  auto trimmed_filter = vstk::util::trim(module_filter);
   bool target_module_only = trimmed_filter == "$";
 
   if (!trimmed_filter.empty() && !target_module_only) {
@@ -128,7 +128,7 @@ void TracerHost::execute_inspection(
   // optional pause point
   if (pause_after_load) {
     _log.inf("pausing after library load");
-    wait_for_input("press enter to continue...");
+    vstk::util::wait_for_input("press enter to continue...");
   }
 
   // step 2: initialize tracer session after VST is loaded

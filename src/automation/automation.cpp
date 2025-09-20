@@ -106,27 +106,27 @@ size_t Automation::parse_keyframe_time(const std::string& time_str,
                                        double sample_rate,
                                        size_t input_length_in_samples) {
   // remove any excess whitespace
-  std::string trimmed = trim(time_str);
+  std::string trimmed = util::trim(time_str);
 
-  bool is_seconds = ends_with_char(trimmed, 's');
-  bool is_percentage = ends_with_char(trimmed, '%');
+  bool is_seconds = util::ends_with_char(trimmed, 's');
+  bool is_percentage = util::ends_with_char(trimmed, '%');
 
   if (is_seconds || is_percentage) {
     // remove the suffix and any whitespace preceding it
     std::string number_str = trimmed.substr(0, trimmed.length() - 1);
-    number_str = trim(number_str);
+    number_str = util::trim(number_str);
 
     // parse the floating-point number
     float time;
     try {
-      time = parse_float_strict(number_str);
+      time = util::parse_float_strict(number_str);
     } catch (const std::invalid_argument& ia) {
       throw std::runtime_error("invalid floating-point number '" + number_str +
                                "'");
     }
 
     if (is_seconds) {
-      return seconds_to_samples(time, sample_rate);
+      return util::seconds_to_samples(time, sample_rate);
     } else /* if (is_percentage) */ {
       return static_cast<size_t>(std::round(
           (time / 100.0) * static_cast<double>(input_length_in_samples)));
@@ -136,7 +136,7 @@ size_t Automation::parse_keyframe_time(const std::string& time_str,
   // no known suffix was detected - parse as an integer sample value
   size_t time;
   try {
-    time = parse_ulong_strict(trimmed);
+    time = util::parse_ulong_strict(trimmed);
   } catch (const std::invalid_argument& ia) {
     throw std::runtime_error("invalid sample index '" + trimmed + "'");
   }

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <limits>
 
-namespace vstk {
+namespace vstk::util {
 
 size_t seconds_to_samples(double sec, double sample_rate) {
   return static_cast<size_t>(sec * sample_rate);
@@ -48,4 +48,4 @@ void wait_for_input(const std::string& message) {
   std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
-} // namespace vstk
+} // namespace vstk::util

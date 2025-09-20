@@ -99,7 +99,7 @@ void MinimalHost::inspect_plugin(const std::string& plugin_path,
   // pause for debugging if requested
   if (pause_after_load) {
     _log.inf("pausing after plugin module load (before initialization)");
-    wait_for_input("plugin loaded into memory. press enter to continue with "
+    util::wait_for_input("plugin loaded into memory. press enter to continue with "
                    "initialization...");
   }
 

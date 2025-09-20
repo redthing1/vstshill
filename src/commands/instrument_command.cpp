@@ -146,8 +146,8 @@ int InstrumentCommand::execute_script(const std::string& plugin_path) {
     for (const auto& kv : args::get(script_config_)) {
       auto pos = kv.find('=');
       if (pos != std::string::npos) {
-        auto key = vstk::trim(kv.substr(0, pos));
-        auto value = vstk::trim(kv.substr(pos + 1));
+        auto key = util::trim(kv.substr(0, pos));
+        auto value = util::trim(kv.substr(pos + 1));
         if (!key.empty()) {
           config.script_config[key] = value;
         } else {
