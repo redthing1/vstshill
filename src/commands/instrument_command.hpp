@@ -3,6 +3,10 @@
 #include "../ext/args.hpp"
 #include "command.hpp"
 
+#include <optional>
+#include <string>
+#include <string_view>
+
 namespace vstk {
 
 class InstrumentCommand : public Command {
@@ -17,6 +21,19 @@ public:
   }
 
 private:
+  enum class TracerKind { Coverage, Transfer, Script };
+
+  static constexpr std::string_view kTracerCoverage = "w1cov";
+  static constexpr std::string_view kTracerTransfer = "w1xfer";
+  static constexpr std::string_view kTracerScript = "w1script";
+
+  struct InvocationContext {
+    std::string plugin_path;
+    bool pause_after_load;
+    std::string module_filter;
+    int verbosity;
+  };
+
   args::Subparser& parser_;
   args::Positional<std::string> plugin_path_;
   args::Flag pause_flag_;
@@ -40,14 +57,36 @@ private:
 
   // module filtering
   args::ValueFlag<std::string> module_filter_;
+  args::Flag target_only_;
 
   int verbosity_level() const;
-  std::string module_filter_value();
+  std::optional<std::string> resolve_module_filter();
+  InvocationContext make_context(const std::string& plugin_path,
+                                 const std::string& module_filter);
+  std::optional<TracerKind> parse_tracer_kind();
+  bool validate_options(TracerKind kind);
+  static constexpr std::string_view tracer_name(TracerKind kind) {
+    switch (kind) {
+    case TracerKind::Coverage:
+      return kTracerCoverage;
+    case TracerKind::Transfer:
+      return kTracerTransfer;
+    case TracerKind::Script:
+      return kTracerScript;
+    }
+    return "unknown";
+  }
+
+  template <typename Config>
+  void apply_common_config(Config& config, const InvocationContext& ctx) const;
+
+  template <typename Session, typename Config>
+  int run_tracer(const InvocationContext& ctx, Config&& config);
 
   // execution methods
-  int execute_coverage(const std::string& plugin_path);
-  int execute_transfer(const std::string& plugin_path);
-  int execute_script(const std::string& plugin_path);
+  int execute_coverage(const InvocationContext& ctx);
+  int execute_transfer(const InvocationContext& ctx);
+  int execute_script(const InvocationContext& ctx);
 };
 
 } // namespace vstk

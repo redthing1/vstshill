@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace vstk::util {
 
@@ -16,6 +18,10 @@ unsigned long parse_ulong_strict(const std::string& str);
 
 // trim whitespace from both ends
 std::string trim(const std::string& str);
+
+// join list of strings with separator (defaults to ", ")
+std::string join_strings(const std::vector<std::string>& values,
+                         std::string_view separator = ", ");
 
 // check if string ends with character
 bool ends_with_char(const std::string& str, char ch);

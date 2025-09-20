@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <sstream>
 
 namespace vstk::util {
 
@@ -46,6 +47,23 @@ bool ends_with_char(const std::string& str, char ch) {
 void wait_for_input(const std::string& message) {
   std::cout << message << std::flush;
   std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+}
+
+std::string join_strings(const std::vector<std::string>& values,
+                         std::string_view separator) {
+  if (values.empty()) {
+    return {};
+  }
+
+  std::ostringstream stream;
+  for (size_t index = 0; index < values.size(); ++index) {
+    if (index > 0) {
+      stream << separator;
+    }
+    stream << values[index];
+  }
+
+  return stream.str();
 }
 
 } // namespace vstk::util
