@@ -41,6 +41,9 @@ private:
   // module filtering
   args::ValueFlag<std::string> module_filter_;
 
+  int verbosity_level() const;
+  std::string module_filter_value();
+
   // execution methods
   int execute_coverage(const std::string& plugin_path);
   int execute_transfer(const std::string& plugin_path);

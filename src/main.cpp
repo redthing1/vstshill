@@ -20,14 +20,14 @@ args::CounterFlag verbosity_flag(arguments, "verbosity", "verbosity level",
 void apply_verbosity() {
   int verbosity = args::get(verbosity_flag);
   redlog::set_level(redlog::level::info);
-  if (verbosity == vstk::constants::VERBOSITY_LEVEL_VERBOSE) {
-    redlog::set_level(redlog::level::verbose);
-  } else if (verbosity == vstk::constants::VERBOSITY_LEVEL_TRACE) {
-    redlog::set_level(redlog::level::trace);
+  if (verbosity >= vstk::constants::VERBOSITY_LEVEL_PEDANTIC) {
+    redlog::set_level(redlog::level::pedantic);
   } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_DEBUG) {
     redlog::set_level(redlog::level::debug);
-  } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_PEDANTIC) {
-    redlog::set_level(redlog::level::pedantic);
+  } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_TRACE) {
+    redlog::set_level(redlog::level::trace);
+  } else if (verbosity >= vstk::constants::VERBOSITY_LEVEL_VERBOSE) {
+    redlog::set_level(redlog::level::verbose);
   }
 }
 

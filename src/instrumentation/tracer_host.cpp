@@ -32,91 +32,70 @@ static bool is_critical_module(const std::string& module_name) {
   return false;
 }
 
-// apply module filtering based on filter pattern
+// restrict instrumentation to the module that owns the target function
 template <typename TSession>
-static void
-apply_module_filtering(TSession& session, const std::string& filter_pattern,
-                       void* target_function_addr, redlog::logger& log) {
-  if (filter_pattern.empty()) {
-    log.dbg("no module filter specified, instrumenting all modules");
+static void restrict_to_target_module(TSession& session,
+                                      void* target_function_addr,
+                                      redlog::logger& log) {
+  if (!target_function_addr) {
+    log.warn("cannot restrict instrumentation - null function address");
     return;
   }
 
-  log.inf("applying module filter", redlog::field("pattern", filter_pattern));
-
-  // get all current process memory maps
   auto memory_maps = QBDI::getCurrentProcessMaps(true);
+  if (memory_maps.empty()) {
+    log.warn("no process memory maps available for filtering");
+    return;
+  }
 
-  // remove all instrumented ranges first
-  session.get_vm()->removeAllInstrumentedRanges();
-
-  size_t total_modules = 0;
-  size_t instrumented_modules = 0;
-
-  // special handling for '$' pattern - instrument only the module containing
-  // the target function
-  bool main_module_only = (filter_pattern == "$");
+  QBDI::rword target_addr = reinterpret_cast<QBDI::rword>(target_function_addr);
   std::string target_module_name;
 
-  if (main_module_only) {
-    // find the module containing the target function address
-    QBDI::rword addr = reinterpret_cast<QBDI::rword>(target_function_addr);
-    for (const auto& map : memory_maps) {
-      if (map.range.contains(addr)) {
-        target_module_name = map.name;
-        log.dbg("target function found in module",
-                redlog::field("module", target_module_name),
-                redlog::field("function_addr", "0x%lx", addr));
-        break;
-      }
-    }
-    if (target_module_name.empty()) {
-      log.warn("could not find module containing target function",
-               redlog::field("function_addr", "0x%lx", addr));
-      return;
+  for (const auto& map : memory_maps) {
+    if (map.range.contains(target_addr)) {
+      target_module_name = map.name;
+      log.dbg("target function located",
+              redlog::field("module", target_module_name),
+              redlog::field("function_addr", "0x%lx", target_addr));
+      break;
     }
   }
 
-  // re-add only modules that match the filter or are critical
+  if (target_module_name.empty()) {
+    log.warn("unable to determine target module for instrumentation",
+             redlog::field("function_addr", "0x%lx", target_addr));
+    return;
+  }
+
+  session.get_vm()->removeAllInstrumentedRanges();
+
+  size_t instrumented_modules = 0;
+
   for (const auto& map : memory_maps) {
     if (map.name.empty()) {
       continue;
     }
 
-    total_modules++;
-
-    bool matches_filter = false;
-    bool is_critical = is_critical_module(map.name);
-
-    if (main_module_only) {
-      // for '$' pattern, match only the module containing the target function
-      matches_filter = (map.name == target_module_name);
-    } else {
-      // normal substring matching
-      matches_filter = map.name.find(filter_pattern) != std::string::npos;
+    const bool is_target = map.name == target_module_name;
+    const bool keep = is_target || is_critical_module(map.name);
+    if (!keep) {
+      continue;
     }
 
-    if (matches_filter || is_critical) {
-      if (session.get_vm()->addInstrumentedModuleFromAddr(map.range.start())) {
-        instrumented_modules++;
-        log.dbg("instrumented module", redlog::field("name", map.name),
-                redlog::field("range_start", "0x%lx", map.range.start()),
-                redlog::field("range_end", "0x%lx", map.range.end()),
-                redlog::field("reason", matches_filter ? (main_module_only
-                                                              ? "target_module"
-                                                              : "filter_match")
-                                                       : "critical"));
-      } else {
-        log.warn("failed to instrument module",
-                 redlog::field("name", map.name));
-      }
+    if (session.get_vm()->addInstrumentedModuleFromAddr(map.range.start())) {
+      instrumented_modules++;
+      log.dbg("instrumented module", redlog::field("name", map.name),
+              redlog::field("range_start", "0x%lx", map.range.start()),
+              redlog::field("range_end", "0x%lx", map.range.end()),
+              redlog::field("reason", is_target ? "target_module" : "critical"));
+    } else {
+      log.warn("failed to instrument module", redlog::field("name", map.name));
     }
   }
 
-  log.inf("module filtering complete",
-          redlog::field("total_modules", total_modules),
-          redlog::field("instrumented_modules", instrumented_modules),
-          redlog::field("filter_pattern", filter_pattern));
+  log.inf("applied target-only instrumentation",
+          redlog::field("target_module", target_module_name),
+          redlog::field("instrumented_modules", instrumented_modules));
 }
 
 template <typename TSession>
@@ -124,6 +103,18 @@ void TracerHost::execute_inspection(
     const std::string& plugin_path,
     const typename TSession::config_type& config, bool pause_after_load,
     const std::string& module_filter) {
+  auto session_config = config;
+
+  auto trimmed_filter = vstk::trim(module_filter);
+  bool target_module_only = trimmed_filter == "$";
+
+  if (!trimmed_filter.empty() && !target_module_only) {
+    session_config.module_filter.clear();
+    session_config.module_filter.push_back(trimmed_filter);
+    _log.inf("configured module filter",
+             redlog::field("pattern", trimmed_filter));
+  }
+
   // step 1: load library outside instrumentation
   _log.dbg("loading plugin library");
   std::string error_desc;
@@ -142,7 +133,7 @@ void TracerHost::execute_inspection(
 
   // step 2: initialize tracer session after VST is loaded
   _log.dbg("initializing tracer session");
-  TSession session(config);
+  TSession session(session_config);
 
   if (!session.initialize()) {
     _log.err("failed to initialize tracer session");
@@ -165,8 +156,9 @@ void TracerHost::execute_inspection(
     return;
   }
 
-  // apply module filtering if specified
-  apply_module_filtering(session, module_filter, func_ptr, _log);
+  if (target_module_only) {
+    restrict_to_target_module(session, func_ptr, _log);
+  }
 
   // step 4: initialize vst under instrumentation
   uint64_t module_ptr;
@@ -192,8 +184,14 @@ void TracerHost::execute_inspection(
     return;
   }
 
+  if (result != 0) {
+    _log.err("inspection reported failure",
+             redlog::field("result", result));
+    return;
+  }
+
   // handle tracer-specific finalization
-  finalize(session, config);
+  finalize(session, session_config);
 }
 
 // finalization for coverage tracer

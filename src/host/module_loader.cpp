@@ -284,6 +284,13 @@ VstModule::initializeFromLibrary(void* libraryHandle,
   context.bundle_path = bundlePath;
   context.library_handle = libraryHandle;
 
+  auto signal_failure = [&](const std::string& message) -> std::unique_ptr<VstModule> {
+    context.error_description = message;
+    context.stage = LoadingStage::LOAD_FAILED;
+    call_instrumentation(context);
+    return nullptr;
+  };
+
 #if defined(__APPLE__)
   CFBundleRef bundle = reinterpret_cast<CFBundleRef>(libraryHandle);
 
@@ -313,7 +320,7 @@ VstModule::initializeFromLibrary(void* libraryHandle,
   if (!bundleEntry || !getFactory) {
     errorDescription = "could not find bundleEntry or GetPluginFactory";
     _log.error("symbol resolution failed");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
 
   // call bundleEntry
@@ -325,7 +332,7 @@ VstModule::initializeFromLibrary(void* libraryHandle,
   if (!bundleEntry(bundle)) {
     errorDescription = "bundleEntry() failed";
     _log.error("bundleEntry call failed");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
 
   context.stage = LoadingStage::POST_INIT_DLL;
@@ -341,7 +348,7 @@ VstModule::initializeFromLibrary(void* libraryHandle,
   if (!factory) {
     errorDescription = "GetPluginFactory() returned null";
     _log.error("GetPluginFactory returned null");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
 
   context.stage = LoadingStage::POST_FACTORY_CALL;
@@ -349,64 +356,134 @@ VstModule::initializeFromLibrary(void* libraryHandle,
 
 #elif defined(__linux__)
   // similar implementation for linux
+  context.stage = LoadingStage::PRE_SYMBOL_RESOLVE;
+  context.symbol_name = "ModuleEntry";
+  call_instrumentation(context);
+
   auto moduleEntry =
       reinterpret_cast<ModuleEntryFunc>(dlsym(libraryHandle, "ModuleEntry"));
+
+  context.symbol_address = reinterpret_cast<void*>(moduleEntry);
+  context.stage = LoadingStage::POST_SYMBOL_RESOLVE;
+  call_instrumentation(context);
+
+  context.symbol_name = "GetPluginFactory";
+  context.stage = LoadingStage::PRE_SYMBOL_RESOLVE;
+  call_instrumentation(context);
+
   auto getFactory = reinterpret_cast<GetFactoryProc>(
       dlsym(libraryHandle, "GetPluginFactory"));
+
+  context.symbol_address = reinterpret_cast<void*>(getFactory);
+  context.stage = LoadingStage::POST_SYMBOL_RESOLVE;
+  call_instrumentation(context);
 
   if (!moduleEntry || !getFactory) {
     errorDescription = "could not find ModuleEntry or GetPluginFactory";
     _log.error("symbol resolution failed");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
+
+  context.stage = LoadingStage::PRE_INIT_DLL;
+  context.symbol_name = "ModuleEntry";
+  context.symbol_address = reinterpret_cast<void*>(moduleEntry);
+  call_instrumentation(context);
 
   if (!moduleEntry(libraryHandle)) {
     errorDescription = "ModuleEntry() failed";
     _log.error("ModuleEntry call failed");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
+
+  context.stage = LoadingStage::POST_INIT_DLL;
+  call_instrumentation(context);
+
+  context.stage = LoadingStage::PRE_FACTORY_CALL;
+  context.symbol_name = "GetPluginFactory";
+  context.symbol_address = reinterpret_cast<void*>(getFactory);
+  call_instrumentation(context);
 
   Steinberg::IPluginFactory* factory = getFactory();
   if (!factory) {
     errorDescription = "GetPluginFactory() returned null";
     _log.error("GetPluginFactory returned null");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
 
+  context.stage = LoadingStage::POST_FACTORY_CALL;
+  call_instrumentation(context);
+
 #elif defined(_WIN32)
+  context.stage = LoadingStage::PRE_SYMBOL_RESOLVE;
+  context.symbol_name = "InitDll";
+  call_instrumentation(context);
+
   auto initDll = reinterpret_cast<InitModuleFunc>(
       GetProcAddress(reinterpret_cast<HMODULE>(libraryHandle), "InitDll"));
+
+  context.symbol_address = reinterpret_cast<void*>(initDll);
+  context.stage = LoadingStage::POST_SYMBOL_RESOLVE;
+  call_instrumentation(context);
+
+  context.symbol_name = "GetPluginFactory";
+  context.stage = LoadingStage::PRE_SYMBOL_RESOLVE;
+  call_instrumentation(context);
+
   auto getFactory = reinterpret_cast<GetFactoryProc>(GetProcAddress(
       reinterpret_cast<HMODULE>(libraryHandle), "GetPluginFactory"));
+
+  context.symbol_address = reinterpret_cast<void*>(getFactory);
+  context.stage = LoadingStage::POST_SYMBOL_RESOLVE;
+  call_instrumentation(context);
 
   if (!getFactory) {
     errorDescription = "GetProcAddress could not find GetPluginFactory";
     _log.error("GetPluginFactory symbol not found");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
 
-  if (initDll && !initDll()) {
-    errorDescription = "InitDll() failed";
-    _log.error("InitDll call failed");
-    return nullptr;
+  if (initDll) {
+    context.stage = LoadingStage::PRE_INIT_DLL;
+    context.symbol_name = "InitDll";
+    context.symbol_address = reinterpret_cast<void*>(initDll);
+    call_instrumentation(context);
+
+    if (!initDll()) {
+      errorDescription = "InitDll() failed";
+      _log.error("InitDll call failed");
+      return signal_failure(errorDescription);
+    }
+
+    context.stage = LoadingStage::POST_INIT_DLL;
+    call_instrumentation(context);
   }
+
+  context.stage = LoadingStage::PRE_FACTORY_CALL;
+  context.symbol_name = "GetPluginFactory";
+  context.symbol_address = reinterpret_cast<void*>(getFactory);
+  call_instrumentation(context);
 
   Steinberg::IPluginFactory* factory = getFactory();
   if (!factory) {
     errorDescription = "GetPluginFactory() returned null";
     _log.error("GetPluginFactory returned null");
-    return nullptr;
+    return signal_failure(errorDescription);
   }
+
+  context.stage = LoadingStage::POST_FACTORY_CALL;
+  call_instrumentation(context);
 
 #else
   errorDescription = "platform not supported";
-  return nullptr;
+  _log.error("platform not supported for vst3 loading");
+  return signal_failure(errorDescription);
 #endif
 
   _log.inf("vst3 module initialized successfully",
            redlog::field("path", bundlePath),
            redlog::field("factory", factory != nullptr));
 
+  context.error_description.clear();
   context.stage = LoadingStage::LOAD_COMPLETE;
   call_instrumentation(context);
 
